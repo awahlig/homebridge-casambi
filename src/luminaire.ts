@@ -76,7 +76,7 @@ export class LuminaireAccessory {
 
     // Update characteristics to current values and start watching for changes.
     this.updateCharacteristicsFromUnitState(unitState);
-    this.platform.connection?.on('message', this.onMessage.bind(this));
+    this.platform.connection!.on('message', this.onMessage.bind(this));
   }
 
   /**
