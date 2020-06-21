@@ -1,16 +1,32 @@
 {
-  "pluginAlias": "ExampleHomebridgePlugin",
+  "pluginAlias": "Casambi",
   "pluginType": "platform",
   "singular": true,
   "schema": {
     "type": "object",
     "properties": {
-      "name": {
-        "title": "Name",
+      "apiKey": {
         "type": "string",
-        "required": true,
-        "default": "Example Dynamic Platform"
+        "required": true
+      },
+      "network": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "required": true
+          },
+          "password": {
+            "type": "string",
+            "required": true
+          }
+        }
       }
     }
-  }
+  },
+  "layout": [
+    { "key": "apiKey", "title": "API Key" },
+    { "key": "network.email", "title": "Network credentials", "placeholder": "e-mail" },
+    { "key": "network.password", "notitle": true, "placeholder": "password" }
+  ]
 }
