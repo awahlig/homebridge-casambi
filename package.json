@@ -1,5 +1,4 @@
 {
-  "private": true,
   "displayName": "Homebridge Casambi",
   "name": "homebridge-casambi",
   "version": "0.1.0",
@@ -42,3 +41,4 @@
     "typescript": "^3.9.5"
   }
 }
+
