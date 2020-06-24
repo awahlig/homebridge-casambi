@@ -2,6 +2,11 @@ import events from 'events';
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 import { default as WebSocket } from 'ws';
 
+export const WIRE_ID = 1;
+const PING_INTERVAL = 30000;
+const PONG_TIMEOUT = PING_INTERVAL + 2000;
+const SEND_CONTROLUNIT_TIMEOUT = 5000;
+
 /**
  * Main object used to talk to the Casambi Cloud API.
  */
@@ -138,7 +143,6 @@ export class CasambiConnection extends events.EventEmitter {
     public networkId: string,
     public sessionId: string) {    
     super();
-    this.connect();
   }
 
   createConnectedWebSocket() {
@@ -149,19 +153,19 @@ export class CasambiConnection extends events.EventEmitter {
       id: this.networkId,
       session: this.sessionId,
       ref: Math.random().toString(36).substr(2),
-      wire: 1,
+      wire: WIRE_ID,
       type: 1,
     };
     return new Promise((resolve, reject) => {
       const ws = new WebSocket('wss://door.casambi.com/v1/bridge/', apiKey);
       ws.on('message', (data: string) => {
         const message = JSON.parse(data);
-        if (message['ref'] === openMessage.ref) {
-          if (message['wireStatus'] === 'openWireSucceed') {
+        if ('wireStatus' in message && message.ref === openMessage.ref) {
+          if (message.wireStatus === 'openWireSucceed') {
             ws.removeAllListeners();
             resolve(ws);
           } else {
-            reject(message['wireStatus']);
+            reject(message.wireStatus);
           }
         }
       });
@@ -180,7 +184,7 @@ export class CasambiConnection extends events.EventEmitter {
       ws.once('close', this.onClose.bind(this));
       ws.on('pong', this.onPong.bind(this));
       ws.on('message', this.onMessage.bind(this));
-      this.pingInterval = setInterval(this.sendPing.bind(this), 30000);
+      this.pingInterval = setInterval(this.sendPing.bind(this), PING_INTERVAL);
       this.onPong();
       this.emit('open');
     });
@@ -190,55 +194,88 @@ export class CasambiConnection extends events.EventEmitter {
     this.ws.ping();
   }
 
-  sendMessage(message) {
-    const data = decodeURIComponent(escape(JSON.stringify(message)));
-    return new Promise((resolve, reject) => {
-      this.ws.send(data, error => {
-        if (error) {
-          reject(error);
-        } else {
-          resolve(null);
-        }
-      });
-    });
+  sendMessage(message, callback?) {
+    this.ws.send(decodeURIComponent(escape(JSON.stringify(message))), callback);
   }
 
   /**
    * Control a Casambi unit (turn light on/off, etc.).
    * https://developer.casambi.com/#ws-control-messages
+   * 
+   * Sends a controlUnit request and waits for a corresponding unitChanged
+   * notification.  Times out if no notification is received within 5 seconds.
    * @param unitId 
    * @param targetControls 
+   * @param callback callback(unitChanged_notification?, error?)
    */
-  sendControlUnit(unitId: number, targetControls) {
-    return this.sendMessage({
-      wire: 1,
+  sendControlUnit(unitId: number, targetControls, callback?) {
+    let timeout: NodeJS.Timeout;
+    const onUnitChanged = message => {
+      if (message.id === unitId) {
+        // Add a special attribute to the message to indicate that this unitChanged
+        // event has been sent as a result of an outgoing controlUnit message.
+        // This can be used in other event listeners.
+        message.causedByControlUnit = true;
+        complete(message, null);
+      }
+    };
+    const onWireStatus = wireStatus => {
+      if (wireStatus === 'invalidValueType' || wireStatus === 'invalidData') {
+        complete(null, `received ${wireStatus} error`);
+      }
+    };
+    const complete = (result, error) => {
+      clearTimeout(timeout);
+      if (callback) {
+        callback(result, error);
+      }
+      this.removeListener('unitChanged', onUnitChanged);
+      this.removeListener('wireStatus', onWireStatus);
+    };
+    const onSent = error => {
+      if (error) {
+        complete(null, error);
+      } else {
+        this.prependListener('unitChanged', onUnitChanged);
+        this.prependListener('wireStatus', onWireStatus);
+        timeout = setTimeout(() => {
+          complete(null, 'timed out waiting for unitChanged after sending controlUnit');
+        }, SEND_CONTROLUNIT_TIMEOUT);
+      }
+    };
+    this.sendMessage({
+      wire: WIRE_ID,
       method: 'controlUnit',
       id: unitId,
       targetControls: targetControls,
-    });
+    }, onSent);
   }
 
   private onClose(code: number, reason: string) {
     clearInterval(this.pingInterval!);
     clearTimeout(this.pongTimeout!);
     this.emit('close', code, reason);
-    // Re-connect after 5 seconds.
-    setTimeout(() => {
-      this.connect();
-    }, 5000);
   }
 
   private onPong() {
     clearTimeout(this.pongTimeout!);
     this.pongTimeout = setTimeout(() => {
       this.ws.terminate();
-    }, 30000 + 5000);
+    }, PONG_TIMEOUT);
   }
 
   private onMessage(data: string) {
     const message = JSON.parse(data);
     if ('method' in message) {
-      this.emit('message', message);
+      switch (message.method) {
+        case 'unitChanged':
+        case 'peerChanged':
+        case 'networkUpdated': {
+          this.emit(message.method, message);
+        }
+      }
+    } else if ('wireStatus' in message) {
+      this.emit('wireStatus', message.wireStatus);
     }
   }
 }

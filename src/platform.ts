@@ -4,6 +4,8 @@ import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { LuminaireAccessory } from './luminaire';
 import { CasambiAPI, CasambiNetworkSession, CasambiConnection } from './casambi';
 
+const RECONNECT_DELAY = 5000;
+
 /**
  * HomebridgePlatform
  * This class is the main constructor for your plugin, this is where you should
@@ -59,66 +61,94 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
   async discoverDevices(config: PlatformConfig) {
     this.session = await this.casambi.createNetworkSession(config.network.email, config.network.password);
     this.connection = this.session.createConnection();
+    this.connection.on('open', this.onConnectionOpen.bind(this));
+    this.connection.on('close', this.onConnectionClose.bind(this));
+    this.connection.on('networkUpdated', this.onNetworkUpdated.bind(this));
 
-    // request the state of the entire network
-    const networkState = await this.session.requestState();
+    // request a list of all units in the network
+    const unitList = await this.session.requestUnitList();
 
     // loop over the discovered devices and register each one if it has not already been registered
-    for (const unitKey in networkState.units) {
-      const unitState = networkState.units[unitKey];
-      switch (unitState.type) {
-        
+    for (const unitKey in unitList) {
+      const unitInfo = unitList[unitKey];
+      switch (unitInfo.type) {
         case 'Luminaire': {
-          // generate a unique id for the accessory; this should be generated from
-          // something globally unique, but constant, for example, the device serial
-          // number or MAC address
-          const uuid = this.api.hap.uuid.generate(unitState.address);
-
-          // see if an accessory with the same uuid has already been registered and restored from
-          // the cached devices we stored in the `configureAccessory` method above
-          const existingAccessory = this.accessories.find(accessory => accessory.UUID === uuid);
-
-          if (existingAccessory) {
-            // the accessory already exists
-            this.log.info(`restoring accessory: ${unitState.name}`);
-
-            // if you need to update the accessory.context then you should run `api.updatePlatformAccessories`. eg.:
-            // existingAccessory.context.device = device;
-            // this.api.updatePlatformAccessories([existingAccessory]);
-
-            // create the accessory handler for the restored accessory
-            // this is imported from `platformAccessory.ts`
-            new LuminaireAccessory(this, existingAccessory, unitState);
-
-          } else {
-            // the accessory does not yet exist, so we need to create it
-            this.log.info(`registering accessory: ${unitState.name}`);
-
-            // create a new accessory
-            const accessory = new this.api.platformAccessory(unitState.name, uuid);
-
-            // request and store fixture info in the `accessory.context`
-            // the `context` property can be used to store any data about the accessory you may need
-            accessory.context.fixtureInfo = await this.casambi.requestFixtureInformation(unitState.fixtureId);
-
-            // create the accessory handler for the newly create accessory
-            // this is imported from `platformAccessory.ts`
-            new LuminaireAccessory(this, accessory, unitState);
-
-            // link the accessory to your platform
-            this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-          }
-
-          // it is possible to remove platform accessories at any time using `api.unregisterPlatformAccessories`, eg.:
-          // this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+          await this.handleLuminaire(unitInfo);
           break;
         }
-
         default: {
-          this.log.warn(`unsupported type "${unitState.type}" for unit "${unitState.name}"`);
+          this.log.warn(`Unsupported type "${unitInfo.type}" for unit "${unitInfo.name}"`);
           break;
         }
       }
     }
+
+    // connect now after the accessories have set up their event listeners for the connection
+    this.connect();
+  }
+
+  async handleLuminaire(unitInfo) {
+    // generate a unique id for the accessory; this should be generated from
+    // something globally unique, but constant, for example, the device serial
+    // number or MAC address
+    const uuid = this.api.hap.uuid.generate(unitInfo.address);
+
+    // see if an accessory with the same uuid has already been registered and restored from
+    // the cached devices we stored in the `configureAccessory` method above
+    const existingAccessory = this.accessories.find(accessory => accessory.UUID === uuid);
+
+    if (existingAccessory) {
+      // the accessory already exists
+      this.log.info(`Restoring accessory: ${unitInfo.name}`);
+
+      // if you need to update the accessory.context then you should run `api.updatePlatformAccessories`. eg.:
+      // existingAccessory.context.device = device;
+      // this.api.updatePlatformAccessories([existingAccessory]);
+
+      // create the accessory handler for the restored accessory
+      // this is imported from `platformAccessory.ts`
+      new LuminaireAccessory(this, existingAccessory, unitInfo);
+
+    } else {
+      // the accessory does not yet exist, so we need to create it
+      this.log.info(`Registering accessory: ${unitInfo.name}`);
+
+      // create a new accessory
+      const accessory = new this.api.platformAccessory(unitInfo.name, uuid);
+
+      // request and store fixture info in the `accessory.context`
+      // the `context` property can be used to store any data about the accessory you may need
+      accessory.context.fixtureInfo = await this.casambi.requestFixtureInformation(unitInfo.fixtureId);
+
+      // create the accessory handler for the newly create accessory
+      // this is imported from `platformAccessory.ts`
+      new LuminaireAccessory(this, accessory, unitInfo);
+
+      // link the accessory to your platform
+      this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+    }
+
+    // it is possible to remove platform accessories at any time using `api.unregisterPlatformAccessories`, eg.:
+    // this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+  }
+
+  connect() {
+    this.log.info('Connecting to Casambi Cloud');
+    this.connection!.connect();
+  }
+
+  onConnectionOpen() {
+    this.log.info('Connection successful');
+  }
+
+  onConnectionClose(code, reason) {
+    this.log.error('Connection to Casambi Cloud lost ->', code, reason);
+    // connection to server closed -- re-connect after a delay
+    setTimeout(this.connect.bind(this), RECONNECT_DELAY);
+  }
+
+  onNetworkUpdated(message) {
+    this.log.info('Network updated ->', message);
+    // TODO -- discover new devices, remove old ones
   }
 }

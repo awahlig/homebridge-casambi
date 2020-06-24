@@ -10,17 +10,15 @@ import { CasambiPlatform } from './platform';
 export class LuminaireAccessory {
   private service: Service;
   unitId: number;
-  lastControlUnit: number;
   minCCT: number;
   maxCCT: number;
 
   constructor(
     private readonly platform: CasambiPlatform,
     private readonly accessory: PlatformAccessory,
-    unitState,
+    unitInfo,
   ) {
-    this.unitId = unitState.id;
-    this.lastControlUnit = 0;
+    this.unitId = unitInfo.id;
     this.minCCT = 2700;
     this.maxCCT = 4000;
     
@@ -30,7 +28,7 @@ export class LuminaireAccessory {
     this.accessory.getService(this.platform.Service.AccessoryInformation)!
       .setCharacteristic(this.platform.Characteristic.Manufacturer, fixtureInfo.vendor)
       .setCharacteristic(this.platform.Characteristic.Model, fixtureInfo.model)
-      .setCharacteristic(this.platform.Characteristic.SerialNumber, unitState.address);
+      .setCharacteristic(this.platform.Characteristic.SerialNumber, unitInfo.address);
 
     // get the LightBulb service if it exists, otherwise create a new LightBulb service
     // you can create multiple services for each accessory
@@ -41,7 +39,7 @@ export class LuminaireAccessory {
     // this.accessory.getService('NAME') ?? this.accessory.addService(this.platform.Service.Lightbulb, 'NAME', 'USER_DEFINED_SUBTYPE');
 
     // set the service name, this is what is displayed as the default name on the Home app
-    this.service.setCharacteristic(this.platform.Characteristic.Name, unitState.name);
+    this.service.setCharacteristic(this.platform.Characteristic.Name, unitInfo.name);
 
     // each service must implement at-minimum the "required characteristics" for the given service type
     // see https://developers.homebridge.io/#/service/Lightbulb
@@ -68,15 +66,14 @@ export class LuminaireAccessory {
         }
 
         default: {
-          this.platform.log.warn(`unsupported control type "${controlInfo.type}" for unit "${unitState.name}"`);
+          this.platform.log.warn(`unsupported control type "${controlInfo.type}" for unit "${unitInfo.name}"`);
           break;
         }
       }
     }
 
-    // Update characteristics to current values and start watching for changes.
-    this.updateCharacteristicsFromUnitState(unitState);
-    this.platform.connection!.on('message', this.onMessage.bind(this));
+    // monitor for state changes; current values are always sent after connecting
+    this.platform.connection!.on('unitChanged', this.onUnitChanged.bind(this));
   }
 
   /**
@@ -135,41 +132,36 @@ export class LuminaireAccessory {
   /**
    * Handle notifications from Casambi Cloud.
    */
-  onMessage(message) {
+  onUnitChanged(message) {
     // filter out notifications for this accessory and update the state in HomeKit
-    if (message.method === 'unitChanged' && message.id === this.unitId) {
-      this.platform.log.debug('Received unitChanged event');
-      this.updateCharacteristicsFromUnitState(message);
+    if (message.id === this.unitId) {
+      this.platform.log.debug('Received unitChanged event ->', message);
+      this.updateCharacteristicsFromUnitChanged(message);
     }
   }
 
-  sendControlUnit(targetControls, callback?) {
-    const prm = this.platform.connection!.sendControlUnit(this.unitId, targetControls)
-      .then(result => {
-        this.lastControlUnit = Date.now();
-        return result;
-      });
-    if (callback) {
-      return prm.then(result => {
-        callback(result);
-      }).catch(error => {
-        callback(error);
-      });
-    }
-    return prm;
+  sendControlUnit(targetControls, callback) {
+    this.platform.log.debug('Send controlUnit', targetControls);
+    this.platform.connection!.sendControlUnit(this.unitId, targetControls, (result, error) => {
+      if (error) {
+        this.platform.log.error('Send controlUnit failed ->', error);
+      } else {
+        this.platform.log.debug('Send controlUnit successful');
+      }
+      callback(error);
+    });
   }
 
-  updateCharacteristicsFromUnitState(unitState) {
+  updateCharacteristicsFromUnitChanged(message) {
     // controls is not set when there's no network gateway
-    if (!unitState.controls || !unitState.online) {
+    if (!message.controls) {
       return;
     }
-    // suppress characteristic updates resulting from sendControlUnit() call
-    if (Date.now() - this.lastControlUnit < 1000) {
-      this.lastControlUnit = 0; // ignore only the first update
+    // suppress characteristic updates resulting from sendControlUnit() calls
+    if (message.causedByControlUnit) {
       return;
     }
-    for (const controlInfo of unitState.controls) {
+    for (const controlInfo of message.controls) {
       switch (controlInfo.type) {
         case 'Dimmer': {
           const brightness = controlInfo.value * 100.0;
@@ -180,6 +172,7 @@ export class LuminaireAccessory {
           break;
         }
         case 'CCT': {
+          // update CCT limits, used when sending color temperature
           this.minCCT = controlInfo.min;
           this.maxCCT = controlInfo.max;
           const mired = 1000000 / controlInfo.value;
