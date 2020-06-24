@@ -1,7 +1,7 @@
 {
   "displayName": "Homebridge Casambi",
   "name": "homebridge-casambi",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Control Casambi devices using the Cloud API.",
   "license": "Apache-2.0",
   "repository": {
