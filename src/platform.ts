@@ -73,6 +73,7 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
     this.connection = this.session.createConnection();
     this.connection.on('open', this.onConnectionOpen.bind(this));
     this.connection.on('close', this.onConnectionClose.bind(this));
+    this.connection.on('timeout', this.onConnectionTimeout.bind(this));
     this.connection.on('networkUpdated', this.onNetworkUpdated.bind(this));
 
     // request a list of all units in the network
@@ -169,6 +170,11 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
     this.log.error('Connection to Casambi Cloud lost ->', code, reason);
     // connection to server closed -- re-connect after a delay
     setTimeout(this.connect.bind(this), RECONNECT_DELAY);
+  }
+
+  onConnectionTimeout() {
+    // just log it, re-connect is done in the 'close' handler
+    this.log.error('Connection to Casambi Cloud timed out');
   }
 
   onNetworkUpdated(message) {

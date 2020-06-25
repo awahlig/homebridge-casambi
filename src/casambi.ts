@@ -210,6 +210,7 @@ export class CasambiConnection extends events.EventEmitter {
   private onPong() {
     clearTimeout(this.pongTimeout!);
     this.pongTimeout = setTimeout(() => {
+      this.emit('timeout');
       this.ws.terminate();
     }, PONG_TIMEOUT);
   }
