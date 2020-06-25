@@ -5,7 +5,6 @@ import { default as WebSocket } from 'ws';
 export const WIRE_ID = 1;
 const PING_INTERVAL = 30000;
 const PONG_TIMEOUT = PING_INTERVAL + 2000;
-const SEND_CONTROLUNIT_TIMEOUT = 5000;
 
 /**
  * Main object used to talk to the Casambi Cloud API.
@@ -201,54 +200,17 @@ export class CasambiConnection extends events.EventEmitter {
   /**
    * Control a Casambi unit (turn light on/off, etc.).
    * https://developer.casambi.com/#ws-control-messages
-   * 
-   * Sends a controlUnit request and waits for a corresponding unitChanged
-   * notification.  Times out if no notification is received within 5 seconds.
    * @param unitId 
    * @param targetControls 
-   * @param callback callback(unitChanged_notification?, error?)
+   * @param callback callback(error?)
    */
   sendControlUnit(unitId: number, targetControls, callback?) {
-    let timeout: NodeJS.Timeout;
-    const onUnitChanged = message => {
-      if (message.id === unitId) {
-        // Add a special attribute to the message to indicate that this unitChanged
-        // event has been sent as a result of an outgoing controlUnit message.
-        // This can be used in other event listeners.
-        message.causedByControlUnit = true;
-        complete(message, null);
-      }
-    };
-    const onWireStatus = wireStatus => {
-      if (wireStatus === 'invalidValueType' || wireStatus === 'invalidData') {
-        complete(null, `received ${wireStatus} error`);
-      }
-    };
-    const complete = (result, error) => {
-      clearTimeout(timeout);
-      if (callback) {
-        callback(result, error);
-      }
-      this.removeListener('unitChanged', onUnitChanged);
-      this.removeListener('wireStatus', onWireStatus);
-    };
-    const onSent = error => {
-      if (error) {
-        complete(null, error);
-      } else {
-        this.prependListener('unitChanged', onUnitChanged);
-        this.prependListener('wireStatus', onWireStatus);
-        timeout = setTimeout(() => {
-          complete(null, 'timed out waiting for unitChanged after sending controlUnit');
-        }, SEND_CONTROLUNIT_TIMEOUT);
-      }
-    };
     this.sendMessage({
       wire: WIRE_ID,
       method: 'controlUnit',
       id: unitId,
       targetControls: targetControls,
-    }, onSent);
+    }, callback);
   }
 
   private onClose(code: number, reason: string) {

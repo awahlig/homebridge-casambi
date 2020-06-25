@@ -4,6 +4,7 @@ import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { LuminaireAccessory } from './luminaire';
 import { CasambiAPI, CasambiNetworkSession, CasambiConnection } from './casambi';
 
+// delay after websocket is closed before a connection attempt is made
 const RECONNECT_DELAY = 5000;
 
 /**

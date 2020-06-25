@@ -2,6 +2,9 @@ import { Service, PlatformAccessory, CharacteristicValue, CharacteristicSetCallb
 
 import { CasambiPlatform } from './platform';
 
+// how long to suppress characteristic updates after sending controlUnit messages
+const UNITCHANGED_IGNORE_INTERVAL = 3000;
+
 /**
  * Platform Accessory
  * An instance of this class is created for each accessory your platform registers
@@ -12,6 +15,7 @@ export class LuminaireAccessory {
   unitId: number;
   minCCT: number;
   maxCCT: number;
+  lastControlUnit: number;
 
   constructor(
     private readonly platform: CasambiPlatform,
@@ -21,6 +25,7 @@ export class LuminaireAccessory {
     this.unitId = unitInfo.id;
     this.minCCT = 2700;
     this.maxCCT = 4000;
+    this.lastControlUnit = 0;
     
     const fixtureInfo = accessory.context.fixtureInfo;
 
@@ -66,7 +71,7 @@ export class LuminaireAccessory {
         }
 
         default: {
-          this.platform.log.warn(`unsupported control type "${controlInfo.type}" for unit "${unitInfo.name}"`);
+          this.platform.log.warn('Unsupported control type', controlInfo.type, 'for unit', unitInfo.name);
           break;
         }
       }
@@ -133,36 +138,26 @@ export class LuminaireAccessory {
    * Handle notifications from Casambi Cloud.
    */
   onUnitChanged(message) {
-    // filter out notifications for this accessory and update the state in HomeKit
+    // filter out notifications for this accessory
     if (message.id === this.unitId) {
       this.platform.log.debug('Received unitChanged event ->', message);
-      this.updateCharacteristicsFromUnitChanged(message);
-    }
-  }
 
-  sendControlUnit(targetControls, callback) {
-    this.platform.log.debug('Send controlUnit', targetControls);
-    this.platform.connection!.sendControlUnit(this.unitId, targetControls, (result, error) => {
-      if (error) {
-        this.platform.log.error('Send controlUnit failed ->', error);
+      // suppress characteristic updates right after sendControlUnit() calls
+      if (Date.now() - this.lastControlUnit < UNITCHANGED_IGNORE_INTERVAL) {
+        this.platform.log.debug('Ignoring unitChanged event');
+        this.lastControlUnit = 0; // only once
+
       } else {
-        this.platform.log.debug('Send controlUnit successful');
+        // update the state of HomeKit
+        this.updateCharacteristicsFromUnitChanged(message);
       }
-      callback(error);
-    });
+    }
   }
 
   updateCharacteristicsFromUnitChanged(message) {
-    // controls is not set when there's no network gateway
-    if (!message.controls) {
-      return;
-    }
-    // suppress characteristic updates resulting from sendControlUnit() calls
-    if (message.causedByControlUnit) {
-      return;
-    }
     for (const controlInfo of message.controls) {
       switch (controlInfo.type) {
+
         case 'Dimmer': {
           const brightness = controlInfo.value * 100.0;
           this.service.updateCharacteristic(this.platform.Characteristic.On, brightness > 0);
@@ -171,6 +166,7 @@ export class LuminaireAccessory {
           }
           break;
         }
+
         case 'CCT': {
           // update CCT limits, used when sending color temperature
           this.minCCT = controlInfo.min;
@@ -179,10 +175,17 @@ export class LuminaireAccessory {
           this.service.updateCharacteristic(this.platform.Characteristic.ColorTemperature, mired);
           break;
         }
+
         default: {
           break;
         }
       }
     }
+  }
+
+  sendControlUnit(targetControls, callback) {
+    this.platform.log.debug('Send controlUnit', targetControls);
+    this.platform.connection!.sendControlUnit(this.unitId, targetControls, callback);
+    this.lastControlUnit = Date.now();
   }
 }
