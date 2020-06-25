@@ -60,11 +60,19 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
    * must not be registered again to prevent "duplicate UUID" errors.
    */
   async discoverDevices(config: PlatformConfig) {
+    if (!config.apiKey) {
+      this.log.error('Please configure your Casambi Cloud API key.');
+      return;
+    }
+    if (!config.network || !config.network.email || !config.network.password) {
+      this.log.error('Please configure your Casambi Network credentials.');
+      return;
+    }
     try {
       this.session = await this.casambi.createNetworkSession(config.network.email, config.network.password);
     } catch (error) {
-      if (error.response.status === 401) {
-        this.log.error('Error logging into the network. Wrong email/password.');
+      if (error.response && error.response.status === 401) {
+        this.log.error('Error logging into Casambi Network. Wrong credentials.');
       } else {
         this.log.error('Error creating network session:', error.message);
       }
