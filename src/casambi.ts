@@ -119,18 +119,6 @@ export class CasambiNetworkSession {
  * Represents a WebSocket connection to the Casambi Cloud API.
  * Create using CasambiNetworkSession.createConnection().
  * https://developer.casambi.com/#ws-service
- * 
- * Extends EventEmitter providing following events:
- *
- * - open()
- *   The connection has been established.
- *
- * - close(code: number, reason: string)
- *   The connection has been closed.
- *   Re-connection happens automatically after a delay.
- *
- * - message(message)
- *   A notification has been received from the server.
  */
 export class CasambiConnection extends events.EventEmitter {
   ws: WebSocket;
