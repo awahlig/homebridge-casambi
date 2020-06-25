@@ -93,7 +93,7 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
           break;
         }
         default: {
-          this.log.warn('Unsupported type', unitInfo.type, 'for unit', unitInfo.name);
+          this.log.info('Skipping unit:', unitInfo.name, '- unsupported type:', unitInfo.type);
           handlerClass = null;
         }
       }
