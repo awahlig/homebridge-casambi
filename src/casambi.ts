@@ -216,16 +216,17 @@ export class CasambiConnection extends events.EventEmitter {
 
   private onMessage(data: string) {
     const message = JSON.parse(data);
-    if ('method' in message) {
-      switch (message.method) {
-        case 'unitChanged':
-        case 'peerChanged':
-        case 'networkUpdated': {
-          this.emit(message.method, message);
-        }
+    switch (message.method) {
+      case 'unitChanged':
+      case 'peerChanged':
+      case 'networkUpdated': {
+        this.emit(message.method, message);
+        break;
       }
-    } else if ('wireStatus' in message) {
+    }
+    if ('wireStatus' in message) {
       this.emit('wireStatus', message.wireStatus);
     }
+    this.emit('message', message);
   }
 }
