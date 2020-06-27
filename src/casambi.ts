@@ -24,12 +24,12 @@ export class CasambiAPI {
     });
   }
 
-  get(path: string, config?: AxiosRequestConfig) {
+  get(path: string, config?: AxiosRequestConfig): Promise<any> {
     return this.instance.get(path, config)
       .then((response: AxiosResponse) => response.data);
   }
 
-  post(path: string, data, config?: AxiosRequestConfig) {
+  post(path: string, data, config?: AxiosRequestConfig): Promise<any> {
     return this.instance.post(path, data, config)
       .then((response: AxiosResponse) => response.data);
   }
@@ -52,12 +52,21 @@ export class CasambiAPI {
   }
 
   /**
-   * Request information about the given fixture.
    * https://developer.casambi.com/#request-fixture-information
    * @param fixtureId 
    */
-  requestFixtureInformation(fixtureId: number): Promise<unknown> {
+  requestFixtureInformation(fixtureId: number): Promise<any> {
     return this.get(`/fixtures/${fixtureId}`);
+  }
+
+  /**
+   * https://developer.casambi.com/#request-fixture-icon
+   * @param fixtureId 
+   */
+  requestFixtureIcon(fixtureId: number): Promise<ArrayBuffer> {
+    return this.get(`/fixtures/${fixtureId}/icon`, {
+      responseType: 'arraybuffer',
+    });
   }
 }
 
@@ -72,45 +81,96 @@ export class CasambiNetworkSession {
     public sessionId: string) {
   }
 
-  private get(path: string) {
-    return this.api.get(path, {
+  private get(path: string, config?: AxiosRequestConfig): Promise<any> {
+    return this.api.get(`/networks/${this.networkId}${path}`, {
       headers: {'X-Casambi-Session': this.sessionId},
+      ...config,
     });
   }
 
   /**
    * https://developer.casambi.com/#request-network-information
    */
-  requestInformation() {
-    return this.get(`/networks/${this.networkId}`);
+  requestInformation(): Promise<any> {
+    return this.get('');
   }
 
   /**
    * https://developer.casambi.com/#request-network-unit-list
    */
-  requestUnitList() {
-    return this.get(`/networks/${this.networkId}/units`);
+  requestUnitList(): Promise<any> {
+    return this.get('/units');
   }
 
   /**
    * https://developer.casambi.com/#request-network-unit-state
    * @param unitId 
    */
-  requestUnitState(unitId: number) {
-    return this.get(`/networks/${this.networkId}/units/${unitId}/state`);
+  requestUnitState(unitId: number): Promise<any> {
+    return this.get(`/units/${unitId}/state`);
   }
 
   /**
    * https://developer.casambi.com/#request-network-state
    */
-  requestState() {
-    return this.get(`/networks/${this.networkId}/state`);
+  requestState(): Promise<any> {
+    return this.get('/state');
   }
 
   /**
-   * Create a WebSocket connection and connect it to the server.
+   * https://developer.casambi.com/#request-network-groups
    */
-  createConnection() {
+  requestGroups(): Promise<any> {
+    return this.get('/groups');
+  }
+
+  /**
+   * https://developer.casambi.com/#request-network-scenes
+   */
+  requestScenes(): Promise<any> {
+    return this.get('/scenes');
+  }
+
+  /**
+   * https://developer.casambi.com/#request-network-datapoints
+   * @param filterOptions 
+   */
+  requestDatapoints(filterOptions: string): Promise<any> {
+    return this.get(`/datapoints?${filterOptions}`);
+  }
+
+  /**
+   * https://developer.casambi.com/#request-network-unit-icon
+   * @param unitId 
+   */
+  requestUnitIcon(unitId: number): Promise<ArrayBuffer> {
+    return this.get(`/units/${unitId}/icon`, {
+      responseType: 'arraybuffer',
+    });
+  }
+
+  /**
+   * https://developer.casambi.com/#request-network-gallery
+   */
+  requestGallery(): Promise<any> {
+    return this.get('/gallery');
+  }
+
+  /**
+   * https://developer.casambi.com/#request-network-image
+   * @param imageId 
+   */
+  requestImage(imageId: string): Promise<ArrayBuffer> {
+    return this.get(`/images/${imageId}`, {
+      responseType: 'arraybuffer',
+    });
+  }
+
+
+  /**
+   * Create a WebSocket connection.
+   */
+  createConnection(): CasambiConnection {
     return new CasambiConnection(this.api.apiKey, this.networkId, this.sessionId);
   }
 }
@@ -118,12 +178,29 @@ export class CasambiNetworkSession {
 /**
  * Represents a WebSocket connection to the Casambi Cloud API.
  * Create using CasambiNetworkSession.createConnection().
+ * Call .connect() to actually connect to the server.
  * https://developer.casambi.com/#ws-service
+ * 
+ * Events:
+ * - "open"
+ *   Connected to the server, wire opened.
+ * - "close"
+ *   Connection lost.
+ * - "timeout"
+ *   Connection timed out. Followed by "close".
+ * - "unitChanged", peerChanged", "networkUpdated"
+ *   Received a network/unit event.
+ *   https://developer.casambi.com/#ws-method-types
+ * - "wireStatus"
+ *   Received a wire status message.
+ *   https://developer.casambi.com/#ws-wire-status-types
+ * - "message"
+ *   Generic event called for all received messages.
  */
 export class CasambiConnection extends events.EventEmitter {
   ws: WebSocket;
-  pingInterval?: NodeJS.Timeout;
-  pongTimeout?: NodeJS.Timeout;
+  private pingInterval?: NodeJS.Timeout;
+  private pongTimeout?: NodeJS.Timeout;
 
   constructor(
     public apiKey: string,
@@ -132,8 +209,9 @@ export class CasambiConnection extends events.EventEmitter {
     super();
   }
 
-  createConnectedWebSocket() {
+  private createConnectedWebSocket(): Promise<WebSocket> {
     // Creates a new WebSocket connection and opens a new wire.
+    // https://developer.casambi.com/#ws-create-connection
     const apiKey = this.apiKey;
     const openMessage = {
       method: 'open',
@@ -165,6 +243,12 @@ export class CasambiConnection extends events.EventEmitter {
     });
   }
 
+  /**
+   * Connect to the Cloud server.
+   * Must be called before sending any messages.
+   * First messages received after connecting will be the states
+   * of all units.
+   */
   connect() {
     this.createConnectedWebSocket().then((ws: WebSocket) => {
       this.ws = ws;
@@ -181,6 +265,11 @@ export class CasambiConnection extends events.EventEmitter {
     this.ws.ping();
   }
 
+  /**
+   * Send raw json to the server.
+   * @param message 
+   * @param callback callback(error?)
+   */
   sendMessage(message, callback?) {
     this.ws.send(decodeURIComponent(escape(JSON.stringify(message))), callback);
   }
