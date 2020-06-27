@@ -81,7 +81,7 @@ export class CasambiNetworkSession {
     public sessionId: string) {
   }
 
-  private get(path: string, config?: AxiosRequestConfig): Promise<any> {
+  get(path: string, config?: AxiosRequestConfig): Promise<any> {
     return this.api.get(`/networks/${this.networkId}${path}`, {
       headers: {'X-Casambi-Session': this.sessionId},
       ...config,
