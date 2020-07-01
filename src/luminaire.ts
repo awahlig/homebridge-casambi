@@ -3,7 +3,7 @@ import { Service, PlatformAccessory, CharacteristicValue, CharacteristicSetCallb
 import { CasambiPlatform } from './platform';
 
 // how long to suppress characteristic updates after sending controlUnit messages
-const UNITCHANGED_IGNORE_INTERVAL = 3000;
+const CONTROLUNIT_TIMEOUT = 3000;
 
 /**
  * Platform Accessory
@@ -15,7 +15,7 @@ export class LuminaireAccessory {
   unitId: number;
   minCCT: number;
   maxCCT: number;
-  lastControlUnit: number;
+  controlUnitTimeout?: NodeJS.Timeout;
 
   constructor(
     private readonly platform: CasambiPlatform,
@@ -25,7 +25,6 @@ export class LuminaireAccessory {
     this.unitId = unitInfo.id;
     this.minCCT = 2700;
     this.maxCCT = 4000;
-    this.lastControlUnit = 0;
     
     const fixtureInfo = accessory.context.fixtureInfo;
 
@@ -71,7 +70,7 @@ export class LuminaireAccessory {
         }
 
         default: {
-          this.platform.log.warn('Unsupported control type', controlInfo.type, 'for unit', unitInfo.name);
+          this.platform.log.info('Unsupported control type', controlInfo.type, 'for unit:', unitInfo.name);
           break;
         }
       }
@@ -88,6 +87,14 @@ export class LuminaireAccessory {
   setOn(value: CharacteristicValue, callback: CharacteristicSetCallback) {
 
     this.platform.log.debug('Set Characteristic On ->', value);
+
+    if (value && this.controlUnitTimeout) {
+      // HomeKit sometimes sends On=true right after Brightness=x in which case this could overwrite
+      // the new brightness with the old one, so skip it.
+      this.platform.log.info('Skipping "Turn On" due to recent change');
+      callback(null);
+      return;
+    }
 
     let brightness = 0;
     if (value) {
@@ -142,10 +149,11 @@ export class LuminaireAccessory {
     if (message.id === this.unitId) {
       this.platform.log.debug('Received unitChanged event ->', message);
 
-      // suppress characteristic updates right after sendControlUnit() calls
-      if (Date.now() - this.lastControlUnit < UNITCHANGED_IGNORE_INTERVAL) {
-        this.platform.log.debug('Ignoring unitChanged event');
-        this.lastControlUnit = 0; // only once
+      // suppress characteristic updates right after sendControlUnit() has been called
+      if (this.controlUnitTimeout) {
+        this.platform.log.debug('Ignoring unitChanged after sending controlUnit');
+        clearTimeout(this.controlUnitTimeout);
+        this.controlUnitTimeout = undefined;
 
       } else {
         // update the state of HomeKit
@@ -186,6 +194,13 @@ export class LuminaireAccessory {
   sendControlUnit(targetControls, callback) {
     this.platform.log.debug('Send controlUnit', targetControls);
     this.platform.connection!.sendControlUnit(this.unitId, targetControls, callback);
-    this.lastControlUnit = Date.now();
+
+    if (this.controlUnitTimeout) {
+      clearTimeout(this.controlUnitTimeout);
+    }
+    this.controlUnitTimeout = setTimeout(() => {
+      this.platform.log.info('No unitChanged received after sending controlUnit. Is Gateway not responding?');
+      this.controlUnitTimeout = undefined;
+    }, CONTROLUNIT_TIMEOUT);
   }
 }
