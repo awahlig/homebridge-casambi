@@ -2,9 +2,9 @@
 
 Adds support for devices controlled using the Casambi App (or any of its OEMs). Requires a developer API key to access the Cloud API. Refer to https://developer.casambi.com/ for more information.
 
-The network in the Casambi App must have a gateway configured. A gateway can be any phone/tablet also running the Casambi App and placed within the Bluetooth range of the lights at all times. The Cloud API servers communicate with the gateway device and use its Bluetooth radio to control the lights.
+The network in the Casambi App must have a gateway configured. A gateway can be any phone/tablet running the Casambi App and placed within the Bluetooth range of the lights at all times. The Cloud API servers communicate with the gateway device and use its Bluetooth radio to control the lights.
 
-Right now the only supported devices are lights with the ability to turn them on/off, dim and change the color temperature.
+Right now the only supported device type are lights with the ability to turn them on/off, dim and change the color temperature.
 
 ## Installation
 
