@@ -199,7 +199,7 @@ export class LuminaireAccessory {
       clearTimeout(this.controlUnitTimeout);
     }
     this.controlUnitTimeout = setTimeout(() => {
-      this.platform.log.info('No unitChanged received after sending controlUnit. Is Gateway not responding?');
+      this.platform.log.info('Sent controlUnit but didn\'t receive unitChanged; either nothing changed or gateway is not responding.');
       this.controlUnitTimeout = undefined;
     }, CONTROLUNIT_TIMEOUT);
   }

@@ -4,8 +4,11 @@ import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { LuminaireAccessory } from './luminaire';
 import { CasambiAPI, CasambiNetworkSession, CasambiConnection } from './casambi';
 
-// delay after websocket is closed before a connection attempt is made
-const RECONNECT_DELAY = 5000;
+// delay after login fails before it is retried
+const SESSION_RETRY_DELAY = 30000;
+
+// delay after connection is closed before an attempt to re-connect is made
+const CONNECTION_RETRY_DELAY = 5000;
 
 /**
  * HomebridgePlatform
@@ -68,16 +71,28 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
       this.log.error('Please configure your Casambi Network credentials.');
       return;
     }
+    
     try {
+      // attempt to log in to the network
+      this.log.debug('Logging in to Casambi Network');
       this.session = await this.casambi.createNetworkSession(config.network.email, config.network.password);
+    
     } catch (error) {
       if (error.response && error.response.status === 401) {
-        this.log.error('Error logging into Casambi Network. Wrong credentials.');
+        // wrong email/password -- stop now
+        this.log.error('Error logging in to Casambi Network: wrong credentials');
+
       } else {
-        this.log.error('Error creating network session:', error.message);
+        // any other error -- try again later
+        this.log.error('Error logging in to Casambi Network:', error.message);
+        setTimeout(() => {
+          this.discoverDevices(config);
+        }, SESSION_RETRY_DELAY);
       }
+
       return;
     }
+    
     this.connection = this.session.createConnection();
     this.connection.on('open', this.onConnectionOpen.bind(this));
     this.connection.on('close', this.onConnectionClose.bind(this));
@@ -166,23 +181,23 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
   }
 
   connect() {
-    this.log.info('Connecting to Casambi Cloud');
+    this.log.debug('Connecting');
     this.connection!.connect();
   }
 
   onConnectionOpen() {
-    this.log.info('Connection successful');
+    this.log.debug('Connection successful');
   }
 
   onConnectionClose(code, reason) {
-    this.log.error('Connection to Casambi Cloud lost ->', code, reason);
+    this.log.error('Connection lost ->', code, reason);
     // connection to server closed -- re-connect after a delay
-    setTimeout(this.connect.bind(this), RECONNECT_DELAY);
+    setTimeout(this.connect.bind(this), CONNECTION_RETRY_DELAY);
   }
 
   onConnectionTimeout() {
     // just log it, re-connect is done in the 'close' handler
-    this.log.error('Connection to Casambi Cloud timed out');
+    this.log.error('Connection timed out');
   }
 
   onNetworkUpdated(message) {
