@@ -2,7 +2,7 @@ import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, 
 
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { LuminaireAccessory } from './luminaire';
-import { CasambiAPI, CasambiNetworkSession, CasambiConnection } from './casambi';
+import { CasambiAPI, CasambiNetworkSession } from './casambi';
 
 // delay after login fails before it is retried
 const SESSION_RETRY_DELAY = 30000;
@@ -11,7 +11,7 @@ const SESSION_RETRY_DELAY = 30000;
 const CONNECTION_RETRY_DELAY = 5000;
 
 /**
- * HomebridgePlatform
+ * CasambiPlatform
  * This class is the main constructor for your plugin, this is where you should
  * parse the user config and discover/register accessories with Homebridge.
  */
@@ -23,8 +23,7 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
   public readonly accessories: PlatformAccessory[] = [];
 
   public casambi: CasambiAPI;
-  public session?: CasambiNetworkSession;
-  public connection?: CasambiConnection;
+  public sessions: CasambiNetworkSession[];
 
   constructor(
     public readonly log: Logger,
@@ -34,6 +33,7 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
     this.log.debug('Finished initializing platform:', this.config.name);
 
     this.casambi = new CasambiAPI(config.apiKey);
+    this.sessions = [];
 
     // When this event is fired it means Homebridge has restored all cached accessories from disk.
     // Dynamic Platform plugins should only register new accessories after this event was fired,
@@ -67,24 +67,53 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
       this.log.error('Please configure your Casambi Cloud API key.');
       return;
     }
-    if (!config.network || !config.network.email || !config.network.password) {
-      this.log.error('Please configure your Casambi Network credentials.');
+    if (!config.email || !config.password) {
+      this.log.error('Please configure your Casambi credentials.');
       return;
     }
-    
+
+    const sessions: CasambiNetworkSession[] = [];
     try {
-      // attempt to log in to the network
-      this.log.debug('Logging in to Casambi Network');
-      this.session = await this.casambi.createNetworkSession(config.network.email, config.network.password);
-    
+      switch (config.loginMode) {
+
+        case 'user': {
+          // attempt to log in to the user account
+          this.log.debug('Logging in to Casambi user account');
+          const userSession = await this.casambi.createUserSession(config.email, config.password);
+          this.log.info('Successfully logged in to Casambi account');
+          for (const site of userSession.createSites()) {
+            const siteSessions = site.createNetworkSessions();
+            this.log.info('Found', siteSessions.length, 'network(s) in the site', site.siteInfo.name);
+            sessions.push(...siteSessions);
+          }
+          break;
+        }
+
+        case 'network':
+        case undefined: {
+          // attempt to log in to the network
+          this.log.debug('Logging in to Casambi network');
+          const session = await this.casambi.createNetworkSession(config.email, config.password);
+          this.log.info('Successfully logged in to Casambi network', session.networkInfo.name);
+          sessions.push(session);
+          break;
+        }
+
+        default: {
+          // bad loginMode
+          this.log.error('Unknown login mode:', config.loginMode);
+          return;
+        }
+      }
+
     } catch (error) {
       if (error.response && error.response.status === 401) {
         // wrong email/password -- stop now
-        this.log.error('Error logging in to Casambi Network: wrong credentials');
+        this.log.error('Error logging: wrong credentials');
 
       } else {
         // any other error -- try again later
-        this.log.error('Error logging in to Casambi Network:', error.message);
+        this.log.error('Error logging:', error.message);
         setTimeout(() => {
           this.discoverDevices(config);
         }, SESSION_RETRY_DELAY);
@@ -93,75 +122,78 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
       return;
     }
     
-    this.connection = this.session.createConnection();
-    this.connection.on('open', this.onConnectionOpen.bind(this));
-    this.connection.on('close', this.onConnectionClose.bind(this));
-    this.connection.on('timeout', this.onConnectionTimeout.bind(this));
-    this.connection.on('networkUpdated', this.onNetworkUpdated.bind(this));
+    this.casambi.connection.on('open', this.onConnectionOpen.bind(this));
+    this.casambi.connection.on('close', this.onConnectionClose.bind(this));
+    this.casambi.connection.on('timeout', this.onConnectionTimeout.bind(this));
 
-    // request a list of all units in the network
-    const unitList = await this.session.requestUnitList();
-    this.log.info('Found', Object.keys(unitList).length, 'units in the network');
-
-    // loop over the discovered devices and register each one if it has not already been registered
+    this.sessions = sessions;
     const usedUUIDs = new Set();
-    for (const unitKey in unitList) {
-      const unitInfo = unitList[unitKey];
+    for (const session of sessions) {
+      session.on('networkUpdated', this.onNetworkUpdated.bind(this));
 
-      // check if unit type is supported and figure out the handler class for it
-      let handlerClass;
-      switch (unitInfo.type) {
-        case 'Luminaire': {
-          handlerClass = LuminaireAccessory;
-          break;
+      // request a list of all units in the network
+      const unitList = await session.requestUnitList();
+      this.log.info('Found', Object.keys(unitList).length, 'units in the network', session.networkInfo.name);
+
+      // loop over the discovered devices and register each one if it has not already been registered
+      for (const unitKey in unitList) {
+        const unitInfo = unitList[unitKey];
+
+        // check if unit type is supported and figure out the handler class for it
+        let handlerClass;
+        switch (unitInfo.type) {
+          case 'Luminaire': {
+            handlerClass = LuminaireAccessory;
+            break;
+          }
+          default: {
+            this.log.info('Skipping unit:', unitInfo.name, '- unsupported type:', unitInfo.type);
+            handlerClass = null;
+          }
         }
-        default: {
-          this.log.info('Skipping unit:', unitInfo.name, '- unsupported type:', unitInfo.type);
-          handlerClass = null;
+        if (!handlerClass) {
+          // move on to the next unit if this one is not supported
+          continue;
         }
-      }
-      if (!handlerClass) {
-        // move on to the next unit if this one is not supported
-        continue;
-      }
 
-      // generate a unique id for the accessory; this should be generated from
-      // something globally unique, but constant, for example, the device serial
-      // number or MAC address
-      const uuid = this.api.hap.uuid.generate(unitInfo.address);
-      usedUUIDs.add(uuid);
+        // generate a unique id for the accessory; this should be generated from
+        // something globally unique, but constant, for example, the device serial
+        // number or MAC address
+        const uuid = this.api.hap.uuid.generate(unitInfo.address);
+        usedUUIDs.add(uuid);
 
-      // see if an accessory with the same uuid has already been registered and restored from
-      // the cached devices we stored in the `configureAccessory` method above
-      const existingAccessory = this.accessories.find(accessory => accessory.UUID === uuid);
+        // see if an accessory with the same uuid has already been registered and restored from
+        // the cached devices we stored in the `configureAccessory` method above
+        const existingAccessory = this.accessories.find(accessory => accessory.UUID === uuid);
 
-      if (existingAccessory) {
-      // the accessory already exists
-        this.log.info('Restoring accessory:', unitInfo.name);
+        if (existingAccessory) {
+        // the accessory already exists
+          this.log.info('Restoring accessory:', unitInfo.name);
 
-        // if you need to update the accessory.context then you should run `api.updatePlatformAccessories`. eg.:
-        // existingAccessory.context.device = device;
-        // this.api.updatePlatformAccessories([existingAccessory]);
+          // if you need to update the accessory.context then you should run `api.updatePlatformAccessories`. eg.:
+          // existingAccessory.context.device = device;
+          // this.api.updatePlatformAccessories([existingAccessory]);
 
-        // create the accessory handler for the restored accessory
-        new handlerClass(this, existingAccessory, unitInfo);
+          // create the accessory handler for the restored accessory
+          new handlerClass(this, existingAccessory, session, unitInfo);
 
-      } else {
-      // the accessory does not yet exist, so we need to create it
-        this.log.info('Registering accessory:', unitInfo.name);
+        } else {
+        // the accessory does not yet exist, so we need to create it
+          this.log.info('Registering accessory:', unitInfo.name);
 
-        // create a new accessory
-        const accessory = new this.api.platformAccessory(unitInfo.name, uuid);
+          // create a new accessory
+          const accessory = new this.api.platformAccessory(unitInfo.name, uuid);
 
-        // request and store fixture info in the `accessory.context`
-        // the `context` property can be used to store any data about the accessory you may need
-        accessory.context.fixtureInfo = await this.casambi.requestFixtureInformation(unitInfo.fixtureId);
+          // request and store fixture info in the `accessory.context`
+          // the `context` property can be used to store any data about the accessory you may need
+          accessory.context.fixtureInfo = await this.casambi.requestFixtureInformation(unitInfo.fixtureId);
 
-        // create the accessory handler for the newly create accessory
-        new handlerClass(this, accessory, unitInfo);
+          // create the accessory handler for the newly create accessory
+          new handlerClass(this, accessory, session, unitInfo);
 
-        // link the accessory to your platform
-        this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+          // link the accessory to your platform
+          this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+        }
       }
     }
 
@@ -181,8 +213,13 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
   }
 
   connect() {
-    this.log.debug('Connecting');
-    this.connection!.connect();
+    this.log.debug('Connecting and opening wires');
+    for (const session of this.sessions) {
+      session.openWire()
+        .then(() => {
+          this.log.debug('Wire opened for network', session.networkInfo.name);
+        });
+    }
   }
 
   onConnectionOpen() {

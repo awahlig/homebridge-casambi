@@ -1,4 +1,5 @@
 import { Service, PlatformAccessory, CharacteristicValue, CharacteristicSetCallback } from 'homebridge';
+import { CasambiNetworkSession } from './casambi';
 
 import { CasambiPlatform } from './platform';
 
@@ -20,6 +21,7 @@ export class LuminaireAccessory {
   constructor(
     private readonly platform: CasambiPlatform,
     private readonly accessory: PlatformAccessory,
+    private readonly session: CasambiNetworkSession,
     unitInfo,
   ) {
     this.unitId = unitInfo.id;
@@ -77,7 +79,7 @@ export class LuminaireAccessory {
     }
 
     // monitor for state changes; current values are always sent after connecting
-    this.platform.connection!.on('unitChanged', this.onUnitChanged.bind(this));
+    session.on('unitChanged', this.onUnitChanged.bind(this));
   }
 
   /**
@@ -193,7 +195,9 @@ export class LuminaireAccessory {
 
   sendControlUnit(targetControls, callback) {
     this.platform.log.debug('Send controlUnit', targetControls);
-    this.platform.connection!.sendControlUnit(this.unitId, targetControls, callback);
+    this.session.sendControlUnit(this.unitId, targetControls)
+      .then(() => callback(null))
+      .catch(err => callback(err));
 
     if (this.controlUnitTimeout) {
       clearTimeout(this.controlUnitTimeout);

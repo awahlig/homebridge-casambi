@@ -2,7 +2,7 @@ import events from 'events';
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 import { default as WebSocket } from 'ws';
 
-export const WIRE_ID = 1;
+const MAX_WIRE_ID = 99;
 const PING_INTERVAL = 30000;
 const PONG_TIMEOUT = PING_INTERVAL + 2000;
 
@@ -10,7 +10,13 @@ const PONG_TIMEOUT = PING_INTERVAL + 2000;
  * Main object used to talk to the Casambi Cloud API.
  */
 export class CasambiAPI {
-  instance: AxiosInstance;
+  axios: AxiosInstance;
+
+  /**
+   * Represents the WebSocket connection to the Casambi Cloud API.
+   * https://developer.casambi.com/#ws-service
+   */
+  connection: CasambiConnection;
 
   /**
    * You'll need an API key to use this class. See:
@@ -18,24 +24,25 @@ export class CasambiAPI {
    * @param apiKey 
    */
   constructor(public apiKey: string) {
-    this.instance = axios.create({
+    this.axios = axios.create({
       baseURL: 'https://door.casambi.com/v1',
       headers: {'X-Casambi-Key': apiKey},
     });
+    this.connection = new CasambiConnection(apiKey);
   }
 
   get(path: string, config?: AxiosRequestConfig): Promise<any> {
-    return this.instance.get(path, config)
+    return this.axios.get(path, config)
       .then((response: AxiosResponse) => response.data);
   }
 
   post(path: string, data, config?: AxiosRequestConfig): Promise<any> {
-    return this.instance.post(path, data, config)
+    return this.axios.post(path, data, config)
       .then((response: AxiosResponse) => response.data);
   }
 
   /**
-   * Log into given Casambi Network and return the session.
+   * Log into given Casambi Network and return a session object.
    * https://developer.casambi.com/#create-network-session
    * @param email 
    * @param password 
@@ -45,10 +52,23 @@ export class CasambiAPI {
       email: email,
       password: password,
     }).then(response => {
-      const networkId = Object.keys(response)[0];
-      const sessionId = response[networkId]['sessionId'];
-      return new CasambiNetworkSession(this, networkId, sessionId);
+      const networkInfo = response[Object.keys(response)[0]];
+      return new CasambiNetworkSession(this, networkInfo, networkInfo.sessionId);
     });
+  }
+
+  /**
+   * Log into given user/site account and return a session object.
+   * https://developer.casambi.com/#create-user-session
+   * @param email 
+   * @param password 
+   */
+  createUserSession(email: string, password: string): Promise<CasambiUserSession> {
+    return this.post('/users/session', {
+      email: email,
+      password: password,
+    }).then(response =>
+      new CasambiUserSession(this, response.sites, response.networks, response.sessionId));
   }
 
   /**
@@ -73,16 +93,34 @@ export class CasambiAPI {
 /**
  * Represents a session for a specific Casambi Network.
  * Create using CasambiAPI.createNetworkSession().
+ * 
+ * Events:
+ * - "wireOpen"
+ *   Wire has been opened.
+ * - "wireClose"
+ *   Wire has been closed.
+ * - "unitChanged", peerChanged", "networkUpdated"
+ *   Received a network/unit event.
+ *   https://developer.casambi.com/#ws-method-types
+ * - "wireStatus"
+ *   Received a wire status message.
+ *   https://developer.casambi.com/#ws-wire-status-types
  */
-export class CasambiNetworkSession {
+export class CasambiNetworkSession extends events.EventEmitter {
+  wireId: number;
+
   constructor(
     public api: CasambiAPI,
-    public networkId: string,
+    public networkInfo,
     public sessionId: string) {
+    super();
+    this.wireId = 0;
+    api.connection.on('close', this.onConnectionClose.bind(this));
+    api.connection.on('message', this.onMessage.bind(this));
   }
 
   get(path: string, config?: AxiosRequestConfig): Promise<any> {
-    return this.api.get(`/networks/${this.networkId}${path}`, {
+    return this.api.get(`/networks/${this.networkInfo.id}${path}`, {
       headers: {'X-Casambi-Session': this.sessionId},
       ...config,
     });
@@ -166,133 +204,286 @@ export class CasambiNetworkSession {
     });
   }
 
+  /**
+   * Open connection wire for this network.
+   * Needs to be called to start monitoring network events.
+   */
+  openWire(): Promise<any> {
+    if (this.wireId > 0) {
+      return Promise.resolve();
+    }
+    return this.api.connection.openWire(this.networkInfo.id, this.sessionId)
+      .then((wireId: number) => {
+        this.wireId = wireId;
+        this.emit('wireOpen');
+      });
+  }
 
   /**
-   * Create a WebSocket connection.
+   * Close connection wire for this network.
    */
-  createConnection(): CasambiConnection {
-    return new CasambiConnection(this.api.apiKey, this.networkId, this.sessionId);
+  closeWire(): Promise<any> {
+    if (this.wireId === 0) {
+      return Promise.resolve();
+    }
+    return this.api.connection.closeWire(this.wireId)
+      .then(() => {
+        this.emit('wireClose');
+        this.wireId = 0;
+      });
+  }
+
+  /**
+   * Control a Casambi unit (turn light on/off, etc.) on this network.
+   * Opens a wire first, if needed.
+   * https://developer.casambi.com/#ws-control-messages
+   * @param unitId 
+   * @param targetControls 
+   */
+  sendControlUnit(unitId: number, targetControls): Promise<any> {
+    return this.openWire().then(() =>
+      this.api.connection.sendControlUnit(this.wireId, unitId, targetControls));
+  }
+
+  private onConnectionClose(/*code: number, reason: string*/) {
+    this.wireId = 0;
+  }
+
+  private onMessage(message) {
+    if (message.wire === this.wireId) {
+      switch (message.method) {
+        case 'unitChanged':
+        case 'peerChanged':
+        case 'networkUpdated': {
+          this.emit(message.method, message);
+          break;
+        }
+      }
+      if ('wireStatus' in message) {
+        this.emit('wireStatus', message.wireStatus);
+      }
+    }
+  }
+}
+
+/**
+ * Represents the result of a user login.
+ * Returned by CasambiAPI.createUserSession().
+ * https://developer.casambi.com/#create-user-session
+ */
+export class CasambiUserSession {
+  constructor(
+    public api: CasambiAPI,
+    public sites,
+    public networks,
+    public sessionId: string) {
+  }
+
+  /**
+   * Returns an array of CasambiSite objects for user's sites.
+   */
+  createSites(): CasambiSite[] {
+    const sites: CasambiSite[] = [];
+    for (const siteKey in this.sites) {
+      sites.push(new CasambiSite(this, this.sites[siteKey]));
+    }
+    return sites;
+  }
+
+  /**
+   * Create network session objects for all networks of this user.
+   */
+  createNetworkSessions(): CasambiNetworkSession[] {
+    const sessions: CasambiNetworkSession[] = [];
+    for (const networkKey in this.networks) {
+      sessions.push(new CasambiNetworkSession(this.api, this.networks[networkKey], this.sessionId));
+    }
+    return sessions;
+  }
+}
+
+/**
+ * Represents a single site belonging to a user.
+ * Returned by CasambiUserSession.createSites().
+ */
+export class CasambiSite {
+  constructor(
+    public session: CasambiUserSession,
+    public siteInfo) {
+  }
+
+  /**
+   * Create network session objects for all networks of this site.
+   */
+  createNetworkSessions(): CasambiNetworkSession[] {
+    const sessions: CasambiNetworkSession[] = [];
+    for (const networkKey in this.siteInfo.networks) {
+      const networkInfo = this.siteInfo.networks[networkKey];
+      sessions.push(new CasambiNetworkSession(this.session.api, networkInfo, this.session.sessionId));
+    }
+    return sessions;
   }
 }
 
 /**
  * Represents a WebSocket connection to the Casambi Cloud API.
- * Create using CasambiNetworkSession.createConnection().
- * Call .connect() to actually connect to the server.
  * https://developer.casambi.com/#ws-service
  * 
  * Events:
  * - "open"
- *   Connected to the server, wire opened.
+ *   Connection to the server established.
  * - "close"
  *   Connection lost.
  * - "timeout"
  *   Connection timed out. Followed by "close".
- * - "unitChanged", peerChanged", "networkUpdated"
- *   Received a network/unit event.
- *   https://developer.casambi.com/#ws-method-types
- * - "wireStatus"
- *   Received a wire status message.
- *   https://developer.casambi.com/#ws-wire-status-types
  * - "message"
- *   Generic event called for all received messages.
+ *   Message received from the server.
  */
 export class CasambiConnection extends events.EventEmitter {
-  ws: WebSocket;
+  ws?: WebSocket;
+  private nextWireId: number;
   private pingInterval?: NodeJS.Timeout;
   private pongTimeout?: NodeJS.Timeout;
 
-  constructor(
-    public apiKey: string,
-    public networkId: string,
-    public sessionId: string) {    
+  constructor(public apiKey: string) {
     super();
+    this.ws = undefined;
+    this.nextWireId = 1;
   }
 
-  private createConnectedWebSocket(): Promise<WebSocket> {
-    // Creates a new WebSocket connection and opens a new wire.
-    // https://developer.casambi.com/#ws-create-connection
-    const apiKey = this.apiKey;
-    const openMessage = {
-      method: 'open',
-      id: this.networkId,
-      session: this.sessionId,
-      ref: Math.random().toString(36).substr(2),
-      wire: WIRE_ID,
-      type: 1,
-    };
+  /**
+   * Connect the WebSocket to the server.
+   * Must be followed immediately by openWire().
+   */
+  open(): Promise<any> {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      return Promise.resolve(); // already connected
+    }
     return new Promise((resolve, reject) => {
-      const ws = new WebSocket('wss://door.casambi.com/v1/bridge/', apiKey);
-      ws.on('message', (data: string) => {
-        const message = JSON.parse(data);
-        if ('wireStatus' in message && message.ref === openMessage.ref) {
-          if (message.wireStatus === 'openWireSucceed') {
-            ws.removeAllListeners();
-            resolve(ws);
-          } else {
-            reject(message.wireStatus);
-          }
-        }
-      });
+      const ws = new WebSocket('wss://door.casambi.com/v1/bridge/', this.apiKey);
       ws.once('close', (code: number, reason: string) => {
         reject(reason);
       });
       ws.once('open', () => {
-        ws.send(decodeURIComponent(escape(JSON.stringify(openMessage))));
+        ws.removeAllListeners();
+        this.onOpen(ws);
+        resolve();
       });
     });
   }
 
   /**
-   * Connect to the Cloud server.
-   * Must be called before sending any messages.
-   * First messages received after connecting will be the states
-   * of all units.
+   * Close the WebSocket connection to the server.
    */
-  connect() {
-    this.createConnectedWebSocket().then((ws: WebSocket) => {
-      this.ws = ws;
-      ws.once('close', this.onClose.bind(this));
-      ws.on('pong', this.onPong.bind(this));
-      ws.on('message', this.onMessage.bind(this));
-      this.pingInterval = setInterval(this.sendPing.bind(this), PING_INTERVAL);
-      this.onPong();
-      this.emit('open');
-    });
+  close() {
+    if (this.ws) {
+      this.ws.close();
+    }
   }
 
   sendPing() {
     this.ws.ping();
   }
 
+  newWireId(): number {
+    const wireId = this.nextWireId;
+    this.nextWireId = wireId % MAX_WIRE_ID + 1;
+    return wireId;
+  }
+
   /**
-   * Send raw json to the server.
-   * @param message 
-   * @param callback callback(error?)
+   * Open wire for a Casambi network session.
+   * Connects to the server first, if needed.
+   * Promise resolves with the newly assigned wire ID.
+   * https://developer.casambi.com/#ws-open-message
+   * @param networkId 
+   * @param sessionId 
    */
-  sendMessage(message, callback?) {
-    this.ws.send(decodeURIComponent(escape(JSON.stringify(message))), callback);
+  openWire(networkId: string, sessionId: string): Promise<number> {
+    const openMessage = {
+      method: 'open',
+      id: networkId,
+      session: sessionId,
+      ref: Math.random().toString(36).substr(2),
+      wire: this.newWireId(),
+      type: 1,
+    };
+    return this.open().then(() => {
+      return new Promise((resolve, reject) => {
+        const messageHandler = (message) => {
+          if ('wireStatus' in message && message.ref === openMessage.ref) {
+            this.removeListener('message', messageHandler);
+            if (message.wireStatus === 'openWireSucceed') {
+              resolve(openMessage.wire);
+            } else {
+              reject(message.wireStatus);
+            }
+          }
+        };
+        this.on('message', messageHandler);
+        this.sendMessage(openMessage);
+      });
+    });
+  }
+
+  /**
+   * Close/pause a wire.
+   * https://developer.casambi.com/#ws-close-message
+   * @param wireId 
+   */
+  closeWire(wireId: number): Promise<any> {
+    return this.sendMessage({
+      method: 'close',
+      wire: wireId,
+    });
   }
 
   /**
    * Control a Casambi unit (turn light on/off, etc.).
    * https://developer.casambi.com/#ws-control-messages
+   * @param wireId 
    * @param unitId 
    * @param targetControls 
-   * @param callback callback(error?)
    */
-  sendControlUnit(unitId: number, targetControls, callback?) {
-    this.sendMessage({
-      wire: WIRE_ID,
+  sendControlUnit(wireId: number, unitId: number, targetControls): Promise<any> {
+    return this.sendMessage({
       method: 'controlUnit',
+      wire: wireId,
       id: unitId,
       targetControls: targetControls,
-    }, callback);
+    });
+  }
+
+  /**
+   * Send raw json to the server.
+   * @param message 
+   */
+  sendMessage(message): Promise<any> {
+    return new Promise((resolve, reject) => {
+      this.ws.send(decodeURIComponent(escape(JSON.stringify(message))), (error?) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve();
+        }
+      });
+    });
+  }
+
+  private onOpen(ws: WebSocket) {
+    this.ws = ws;
+    this.ws.once('close', this.onClose.bind(this));
+    this.ws.on('pong', this.onPong.bind(this));
+    this.ws.on('message', this.onMessage.bind(this));
+    this.pingInterval = setInterval(this.sendPing.bind(this), PING_INTERVAL);
+    this.onPong();
+    this.emit('open');
   }
 
   private onClose(code: number, reason: string) {
     clearInterval(this.pingInterval!);
     clearTimeout(this.pongTimeout!);
+    this.ws = undefined;
     this.emit('close', code, reason);
   }
 
@@ -305,18 +496,6 @@ export class CasambiConnection extends events.EventEmitter {
   }
 
   private onMessage(data: string) {
-    const message = JSON.parse(data);
-    switch (message.method) {
-      case 'unitChanged':
-      case 'peerChanged':
-      case 'networkUpdated': {
-        this.emit(message.method, message);
-        break;
-      }
-    }
-    if ('wireStatus' in message) {
-      this.emit('wireStatus', message.wireStatus);
-    }
-    this.emit('message', message);
+    this.emit('message', JSON.parse(data));
   }
 }

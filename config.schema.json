@@ -7,26 +7,33 @@
     "properties": {
       "apiKey": {
         "type": "string",
+        "required": true,
+        "description": "Contact Casambi Support (support@casambi.com) to obtain an API key."
+      },
+      "loginMode": {
+        "type": "string",
+        "required": true,
+        "description": "Choose whether you're providing network or user credentials. A user account allows access to devices from multiple networks (using Casambi App's \"Sites\" functionality).",
+        "default": "network",
+        "oneOf": [
+          { "title": "Network", "enum": ["network"] },
+          { "title": "User", "enum": ["user"] }
+        ]
+      },
+      "email": {
+        "type": "string",
         "required": true
       },
-      "network": {
-        "type": "object",
-        "properties": {
-          "email": {
-            "type": "string",
-            "required": true
-          },
-          "password": {
-            "type": "string",
-            "required": true
-          }
-        }
+      "password": {
+        "type": "string",
+        "required": true
       }
     }
   },
   "layout": [
     { "key": "apiKey", "title": "API Key" },
-    { "key": "network.email", "title": "Network credentials", "placeholder": "e-mail" },
-    { "key": "network.password", "notitle": true, "placeholder": "password" }
+    { "key": "loginMode" },
+    { "key": "email", "title": "Credentials", "placeholder": "e-mail" },
+    { "key": "password", "notitle": true, "placeholder": "password" }
   ]
 }
