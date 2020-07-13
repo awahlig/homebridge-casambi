@@ -78,9 +78,9 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
 
         case 'user': {
           // attempt to log in to the user account
-          this.log.debug('Logging in to Casambi user account');
+          this.log.info('Logging in to Casambi user account');
           const userSession = await this.casambi.createUserSession(config.email, config.password);
-          this.log.info('Successfully logged in to Casambi account');
+          this.log.info('Successfully logged in to Casambi user account');
           for (const site of userSession.createSites()) {
             const siteSessions = site.createNetworkSessions();
             this.log.info('Found', siteSessions.length, 'network(s) in the site', site.siteInfo.name);
@@ -92,7 +92,7 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
         case 'network':
         case undefined: {
           // attempt to log in to the network
-          this.log.debug('Logging in to Casambi network');
+          this.log.info('Logging in to Casambi network');
           const session = await this.casambi.createNetworkSession(config.email, config.password);
           this.log.info('Successfully logged in to Casambi network', session.networkInfo.name);
           sessions.push(session);
@@ -109,11 +109,11 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
     } catch (error) {
       if (error.response && error.response.status === 401) {
         // wrong email/password -- stop now
-        this.log.error('Error logging: wrong credentials');
+        this.log.error('Error logging in: wrong credentials');
 
       } else {
         // any other error -- try again later
-        this.log.error('Error logging:', error.message);
+        this.log.error('Error logging in:', error.message);
         setTimeout(() => {
           this.discoverDevices(config);
         }, SESSION_RETRY_DELAY);
@@ -147,7 +147,7 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
             break;
           }
           default: {
-            this.log.info('Skipping unit:', unitInfo.name, '- unsupported type:', unitInfo.type);
+            this.log.info('Skipping unit', unitInfo.name, '- unsupported type', unitInfo.type);
             handlerClass = null;
           }
         }
@@ -168,7 +168,7 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
 
         if (existingAccessory) {
         // the accessory already exists
-          this.log.info('Restoring accessory:', unitInfo.name);
+          this.log.info('Restoring accessory', unitInfo.name);
 
           // if you need to update the accessory.context then you should run `api.updatePlatformAccessories`. eg.:
           // existingAccessory.context.device = device;
@@ -179,7 +179,7 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
 
         } else {
         // the accessory does not yet exist, so we need to create it
-          this.log.info('Registering accessory:', unitInfo.name);
+          this.log.info('Registering accessory', unitInfo.name);
 
           // create a new accessory
           const accessory = new this.api.platformAccessory(unitInfo.name, uuid);
@@ -201,7 +201,7 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
     // (or are no longer supported by this version of the plugin)
     for (const accessory of this.accessories) {
       if (!usedUUIDs.has(accessory.UUID)) {
-        this.log.info('Unregistering accessory:', accessory.displayName);
+        this.log.info('Unregistering accessory', accessory.displayName);
 
         // unlink the accessory from the platform
         this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);

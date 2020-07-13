@@ -17,7 +17,7 @@
         "default": "network",
         "oneOf": [
           { "title": "Network", "enum": ["network"] },
-          { "title": "User", "enum": ["user"] }
+          { "title": "User (site account)", "enum": ["user"] }
         ]
       },
       "email": {
