@@ -103,11 +103,11 @@ export class LuminaireAccessory {
       brightness = this.service.getCharacteristic(this.platform.Characteristic.Brightness).value as number;
     }
 
-    this.sendControlUnit({
+    this.sendControlUnit(callback, {
       Dimmer: {
         value: brightness / 100.0,
       },
-    }, callback);
+    });
   }
 
   /**
@@ -118,11 +118,11 @@ export class LuminaireAccessory {
 
     this.platform.log.debug('Set Characteristic Brightness -> ', value);
 
-    this.sendControlUnit({
+    this.sendControlUnit(callback, {
       Dimmer: {
         value: value as number / 100.0,
       },
-    }, callback);
+    });
   }
 
   /**
@@ -133,14 +133,14 @@ export class LuminaireAccessory {
 
     this.platform.log.debug('Set Characteristic ColorTemperature -> ', value);
 
-    this.sendControlUnit({
+    this.sendControlUnit(callback, {
       ColorTemperature: {
         value: Math.min(Math.max(1e6 / (value as number), this.minCCT), this.maxCCT),
       },
       Colorsource: {
         source: 'TW',
       },
-    }, callback);
+    });
   }
 
   /**
@@ -181,7 +181,7 @@ export class LuminaireAccessory {
           // update CCT limits, used when sending color temperature
           this.minCCT = controlInfo.min;
           this.maxCCT = controlInfo.max;
-          const mired = 1000000 / controlInfo.value;
+          const mired = 1e6 / controlInfo.value;
           this.service.updateCharacteristic(this.platform.Characteristic.ColorTemperature, mired);
           break;
         }
@@ -193,8 +193,9 @@ export class LuminaireAccessory {
     }
   }
 
-  sendControlUnit(targetControls, callback) {
+  sendControlUnit(callback: CharacteristicSetCallback, targetControls) {
     this.platform.log.debug('Send controlUnit', targetControls);
+    
     this.session.sendControlUnit(this.unitId, targetControls)
       .then(() => callback(null))
       .catch(err => callback(err));
