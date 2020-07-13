@@ -10,7 +10,7 @@ Right now the only supported device type are lights with the ability to turn the
 
 The easiest way to install the plugin is to use the web server built into Homebridge. Go to the *Plugins* tab, search for *homebridge-casambi* and click *Install*.
 
-You can then click *Settings* on the installed plugin to set your API key and Casambi Network credentials.
+You can then click *Settings* on the installed plugin to set your API key and Casambi network or user credentials.
 
 If you prefer to edit Homebridge's `config.json` manually, here's an example:
 
@@ -21,10 +21,9 @@ If you prefer to edit Homebridge's `config.json` manually, here's an example:
         {
             "platform": "Casambi",
             "apiKey": "your_api_key",
-            "network": {
-                "email": "your_network_login",
-                "password": "your_network_password"
-            },
+            "loginMode": "network",
+            "email": "your_network_login",
+            "password": "your_network_password"
         }
     ]
 }
