@@ -133,7 +133,7 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
 
       // request a list of all units in the network
       const unitList = await session.requestUnitList();
-      this.log.info('Found', Object.keys(unitList).length, 'units in the network', session.networkInfo.name);
+      this.log.info('Found', Object.keys(unitList).length, 'unit(s) in the network', session.networkInfo.name);
 
       // loop over the discovered devices and register each one if it has not already been registered
       for (const unitKey in unitList) {
@@ -223,7 +223,7 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
   }
 
   onConnectionOpen() {
-    this.log.debug('Connection successful');
+    this.log.info('Connection successful');
   }
 
   onConnectionClose(code, reason) {
