@@ -208,7 +208,7 @@ export class CasambiNetworkSession extends events.EventEmitter {
    * Open connection wire for this network.
    * Needs to be called to start monitoring network events.
    */
-  openWire(): Promise<any> {
+  openWire(): Promise<void> {
     if (this.wireId > 0) {
       return Promise.resolve();
     }
@@ -222,7 +222,7 @@ export class CasambiNetworkSession extends events.EventEmitter {
   /**
    * Close connection wire for this network.
    */
-  closeWire(): Promise<any> {
+  closeWire(): Promise<void> {
     if (this.wireId === 0) {
       return Promise.resolve();
     }
@@ -240,7 +240,7 @@ export class CasambiNetworkSession extends events.EventEmitter {
    * @param unitId 
    * @param targetControls 
    */
-  sendControlUnit(unitId: number, targetControls): Promise<any> {
+  sendControlUnit(unitId: number, targetControls): Promise<void> {
     return this.openWire().then(() =>
       this.api.connection.sendControlUnit(this.wireId, unitId, targetControls));
   }
@@ -355,7 +355,7 @@ export class CasambiConnection extends events.EventEmitter {
    * Connect the WebSocket to the server.
    * Must be followed immediately by openWire().
    */
-  open(): Promise<any> {
+  open(): Promise<void> {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       return Promise.resolve(); // already connected
     }
@@ -431,7 +431,7 @@ export class CasambiConnection extends events.EventEmitter {
    * https://developer.casambi.com/#ws-close-message
    * @param wireId 
    */
-  closeWire(wireId: number): Promise<any> {
+  closeWire(wireId: number): Promise<void> {
     return this.sendMessage({
       method: 'close',
       wire: wireId,
@@ -445,7 +445,7 @@ export class CasambiConnection extends events.EventEmitter {
    * @param unitId 
    * @param targetControls 
    */
-  sendControlUnit(wireId: number, unitId: number, targetControls): Promise<any> {
+  sendControlUnit(wireId: number, unitId: number, targetControls): Promise<void> {
     return this.sendMessage({
       method: 'controlUnit',
       wire: wireId,
@@ -458,7 +458,7 @@ export class CasambiConnection extends events.EventEmitter {
    * Send raw json to the server.
    * @param message 
    */
-  sendMessage(message): Promise<any> {
+  sendMessage(message): Promise<void> {
     return new Promise((resolve, reject) => {
       this.ws.send(decodeURIComponent(escape(JSON.stringify(message))), (error?) => {
         if (error) {
