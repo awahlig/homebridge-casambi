@@ -356,17 +356,20 @@ export class CasambiConnection extends events.EventEmitter {
    * Must be followed immediately by openWire().
    */
   open(): Promise<void> {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      return Promise.resolve(); // already connected
+    switch (this.ws ? this.ws.readyState : WebSocket.CLOSED) {
+      case WebSocket.CONNECTING: // already connecting
+        break;
+      case WebSocket.OPEN: // already connected
+        return Promise.resolve();
+      default: // no websocket, disconnecting or disconnected
+        this.ws = new WebSocket('wss://door.casambi.com/v1/bridge/', this.apiKey);
+        this.ws.once('open', this.onOpen.bind(this));
     }
     return new Promise((resolve, reject) => {
-      const ws = new WebSocket('wss://door.casambi.com/v1/bridge/', this.apiKey);
-      ws.once('close', (code: number, reason: string) => {
+      this.ws.once('close', (code: number, reason: string) => {
         reject(reason);
       });
-      ws.once('open', () => {
-        ws.removeAllListeners();
-        this.onOpen(ws);
+      this.ws.once('open', () => {
         resolve();
       });
     });
@@ -470,8 +473,7 @@ export class CasambiConnection extends events.EventEmitter {
     });
   }
 
-  private onOpen(ws: WebSocket) {
-    this.ws = ws;
+  private onOpen() {
     this.ws.once('close', this.onClose.bind(this));
     this.ws.on('pong', this.onPong.bind(this));
     this.ws.on('message', this.onMessage.bind(this));
