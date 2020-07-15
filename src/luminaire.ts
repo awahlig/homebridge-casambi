@@ -3,8 +3,11 @@ import { CasambiNetworkSession } from './casambi';
 
 import { CasambiPlatform } from './platform';
 
-// how long to suppress characteristic updates after sending controlUnit messages
-const CONTROLUNIT_TIMEOUT = 3000;
+// When sliding the brightness bar in the Home App, multiple unit state updates are received
+// from the cloud. To avoid interfering with what the user is doing, the updates are passed
+// to HomeKit only after a delay. If more updates are received within that time, previous
+// updates are dropped and the delay is extended.
+const UNITCHANGED_DELAY = 500;
 
 /**
  * Platform Accessory
@@ -14,9 +17,10 @@ const CONTROLUNIT_TIMEOUT = 3000;
 export class LuminaireAccessory {
   private service: Service;
   unitId: number;
+  brightness: number;
   minCCT: number;
   maxCCT: number;
-  controlUnitTimeout?: NodeJS.Timeout;
+  unitChangedTimeout?: NodeJS.Timeout;
 
   constructor(
     private readonly platform: CasambiPlatform,
@@ -78,6 +82,9 @@ export class LuminaireAccessory {
       }
     }
 
+    // get the last known brightness
+    this.brightness = this.service.getCharacteristic(this.platform.Characteristic.Brightness).value as number;
+
     // monitor for state changes; current values are always sent after connecting
     session.on('unitChanged', this.onUnitChanged.bind(this));
   }
@@ -90,22 +97,9 @@ export class LuminaireAccessory {
 
     this.platform.log.debug('Set Characteristic On ->', value);
 
-    if (value && this.controlUnitTimeout) {
-      // HomeKit sometimes sends On=true right after Brightness=x in which case this could overwrite
-      // the new brightness with the old one, so skip it.
-      this.platform.log.info('Skipping "Turn On" due to recent change');
-      callback(null);
-      return;
-    }
-
-    let brightness = 0;
-    if (value) {
-      brightness = this.service.getCharacteristic(this.platform.Characteristic.Brightness).value as number;
-    }
-
     this.sendControlUnit(callback, {
       Dimmer: {
-        value: brightness / 100.0,
+        value: (value ? this.brightness : 0) / 100.0,
       },
     });
   }
@@ -118,9 +112,10 @@ export class LuminaireAccessory {
 
     this.platform.log.debug('Set Characteristic Brightness -> ', value);
 
+    this.brightness = value as number;
     this.sendControlUnit(callback, {
       Dimmer: {
-        value: value as number / 100.0,
+        value: this.brightness / 100.0,
       },
     });
   }
@@ -151,20 +146,20 @@ export class LuminaireAccessory {
     if (message.id === this.unitId) {
       this.platform.log.debug('Received unitChanged event ->', message);
 
-      // suppress characteristic updates right after sendControlUnit() has been called
-      if (this.controlUnitTimeout) {
-        this.platform.log.debug('Ignoring unitChanged after sending controlUnit');
-        clearTimeout(this.controlUnitTimeout);
-        this.controlUnitTimeout = undefined;
-
-      } else {
-        // update the state of HomeKit
-        this.updateCharacteristicsFromUnitChanged(message);
+      // update characteristics after a delay
+      if (this.unitChangedTimeout) {
+        clearTimeout(this.unitChangedTimeout);
       }
+      this.unitChangedTimeout = setTimeout(() => {
+        this.updateCharacteristicsFromUnitChanged(message);
+        this.unitChangedTimeout = undefined;
+      }, UNITCHANGED_DELAY);
     }
   }
 
   updateCharacteristicsFromUnitChanged(message) {
+    this.platform.log.debug('Updating characteristics from unitChanged');
+
     for (const controlInfo of message.controls) {
       switch (controlInfo.type) {
 
@@ -173,6 +168,7 @@ export class LuminaireAccessory {
           this.service.updateCharacteristic(this.platform.Characteristic.On, brightness > 0);
           if (brightness > 0) {
             this.service.updateCharacteristic(this.platform.Characteristic.Brightness, brightness);
+            this.brightness = brightness;
           }
           break;
         }
@@ -199,13 +195,5 @@ export class LuminaireAccessory {
     this.session.sendControlUnit(this.unitId, targetControls)
       .then(() => callback(null))
       .catch(err => callback(err));
-
-    if (this.controlUnitTimeout) {
-      clearTimeout(this.controlUnitTimeout);
-    }
-    this.controlUnitTimeout = setTimeout(() => {
-      this.platform.log.info('Sent controlUnit but didn\'t receive unitChanged; either nothing changed or gateway is not responding.');
-      this.controlUnitTimeout = undefined;
-    }, CONTROLUNIT_TIMEOUT);
   }
 }
