@@ -1,6 +1,6 @@
 # Homebridge Casambi Plugin
 
-Adds support for devices controlled using the Casambi App (or any of its OEMs). Requires a developer API key to access the Cloud API. Refer to https://developer.casambi.com/ for more information.
+Adds support for devices controlled using the Casambi App (or any of its OEMs). Requires a developer API key to access the Cloud API. Refer to [developer.casambi.com](https://developer.casambi.com/) for more information.
 
 The network in the Casambi App must have a gateway configured. A gateway can be any phone/tablet running the Casambi App and placed within the Bluetooth range of the lights at all times. The Cloud API servers communicate with the gateway device and use its Bluetooth radio to control the lights.
 
@@ -21,13 +21,21 @@ If you'd prefer to do it manually, run ```npm install -g homebridge-casambi``` t
         {
             "platform": "Casambi",
             "apiKey": "your_api_key",
-            "loginMode": "network",
+            "loginMode": "network_or_user",
             "email": "your_network_login",
             "password": "your_network_password"
         }
     ]
 }
 ```
+
+|                 |                                                                                                                                                                                                                                   |
+|-----------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ```platform```  | Must be ```Casambi```.                                                                                                                                                                                                            |
+| ```apiKey```    | Your Casambi Cloud API key. Refer to [developer.casambi.com](https://developer.casambi.com/) for more information on how to obtain one.                                                                                           |
+| ```loginMode``` | Either ```network``` or ```user```, depending on whether you're providing network or user (site account) credentials. A site account allows access to devices from multiple networks (using Casambi App's *Sites* functionality). |
+| ```email```     | The network/user login that you configured in the Casambi App.                                                                                                                                                                    |
+| ```password```  | The network/user password.                                                                                                                                                                                                        |
 
 ## License
 
