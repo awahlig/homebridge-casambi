@@ -8,11 +8,11 @@ Right now the only supported device type are lights with the ability to turn the
 
 ## Installation
 
-The easiest way to install the plugin is to use the web server built into Homebridge. Go to the *Plugins* tab, search for *homebridge-casambi* and click *Install*.
+It is recommended to install and configure this plugin using [homebridge-config-ui-x](https://github.com/oznu/homebridge-config-ui-x#readme). Simply go to the *Plugins* tab and search for *homebridge-casambi*.
 
-You can then click *Settings* on the installed plugin to set your API key and Casambi network or user credentials.
+After installing you can click *Settings* to configure the plugin. Don't forget to restart Homebridge after making changes.
 
-If you prefer to edit Homebridge's `config.json` manually, here's an example:
+If you'd prefer to do it manually, run ```npm install -g homebridge-casambi``` to install the plugin and then update ```config.json``` of your Homebridge installation to configure it. Here's an example:
 
 ```
 {
