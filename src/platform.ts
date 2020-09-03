@@ -144,6 +144,7 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
         // check if unit type is supported and figure out the handler class for it
         let handlerClass;
         switch (unitInfo.type) {
+          case 'Driver': // an LED Driver, e.g. "TCI - PROFESSIONALE CASAMBI"
           case 'Luminaire': {
             handlerClass = LuminaireAccessory;
             break;
