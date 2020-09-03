@@ -16,6 +16,7 @@ const UNITCHANGED_DELAY = 500;
  */
 export class LuminaireAccessory {
   private service: Service;
+  unitName: string;
   unitId: number;
   brightness: number;
   minCCT: number;
@@ -28,11 +29,13 @@ export class LuminaireAccessory {
     private readonly session: CasambiNetworkSession,
     unitInfo,
   ) {
+    this.unitName = unitInfo.name;
     this.unitId = unitInfo.id;
     this.minCCT = 2700;
     this.maxCCT = 4000;
     
     const fixtureInfo = accessory.context.fixtureInfo;
+    this.platform.log.debug('Fixture info for unit', unitInfo.name, fixtureInfo);
 
     // set accessory information
     this.accessory.getService(this.platform.Service.AccessoryInformation)!
@@ -53,6 +56,7 @@ export class LuminaireAccessory {
 
     // each service must implement at-minimum the "required characteristics" for the given service type
     // see https://developers.homebridge.io/#/service/Lightbulb
+    let hasOnCharacteristic = false;
     for (const controlInfo of fixtureInfo.controls) {
       switch (controlInfo.type) {
 
@@ -60,6 +64,7 @@ export class LuminaireAccessory {
           // register handlers for the On/Off Characteristic
           this.service.getCharacteristic(this.platform.Characteristic.On)
             .on('set', this.setOn.bind(this));
+          hasOnCharacteristic = true;
 
           // register handlers for the Brightness Characteristic
           this.service.getCharacteristic(this.platform.Characteristic.Brightness)
@@ -82,6 +87,10 @@ export class LuminaireAccessory {
       }
     }
 
+    if (!hasOnCharacteristic) {
+      this.platform.log.error('Luminaire', unitInfo.name, 'has no On characteristic');
+    }
+
     // get the last known brightness
     this.brightness = this.service.getCharacteristic(this.platform.Characteristic.Brightness).value as number;
 
@@ -95,7 +104,7 @@ export class LuminaireAccessory {
    */
   setOn(value: CharacteristicValue, callback: CharacteristicSetCallback) {
 
-    this.platform.log.debug('Set Characteristic On ->', value);
+    this.platform.log.debug('Set characteristic On of unit', this.unitName, 'to', value);
 
     this.sendControlUnit(callback, {
       Dimmer: {
@@ -110,7 +119,7 @@ export class LuminaireAccessory {
    */
   setBrightness(value: CharacteristicValue, callback: CharacteristicSetCallback) {
 
-    this.platform.log.debug('Set Characteristic Brightness -> ', value);
+    this.platform.log.debug('Set characteristic Brightness of unit', this.unitName, 'to', value);
 
     this.brightness = value as number;
     this.sendControlUnit(callback, {
@@ -126,7 +135,7 @@ export class LuminaireAccessory {
    */
   setColorTemperature(value: CharacteristicValue, callback: CharacteristicSetCallback) {
 
-    this.platform.log.debug('Set Characteristic ColorTemperature -> ', value);
+    this.platform.log.debug('Set characteristic ColorTemperature of unit', this.unitName, 'to', value);
 
     this.sendControlUnit(callback, {
       ColorTemperature: {
@@ -144,7 +153,7 @@ export class LuminaireAccessory {
   onUnitChanged(message) {
     // filter out notifications for this accessory
     if (message.id === this.unitId) {
-      this.platform.log.debug('Received unitChanged event ->', message);
+      this.platform.log.debug('Received unitChanged for', this.unitName, message);
 
       // update characteristics after a delay
       if (this.unitChangedTimeout) {
@@ -158,7 +167,7 @@ export class LuminaireAccessory {
   }
 
   updateCharacteristicsFromUnitChanged(message) {
-    this.platform.log.debug('Updating characteristics from unitChanged');
+    this.platform.log.debug('Updating characteristics from unitChanged for', this.unitName);
 
     for (const controlInfo of message.controls) {
       switch (controlInfo.type) {
@@ -183,6 +192,7 @@ export class LuminaireAccessory {
         }
 
         default: {
+          this.platform.log.info('Unsupported control type', controlInfo.type, 'for unit', this.unitName);
           break;
         }
       }
@@ -190,7 +200,7 @@ export class LuminaireAccessory {
   }
 
   sendControlUnit(callback: CharacteristicSetCallback, targetControls) {
-    this.platform.log.debug('Send controlUnit', targetControls);
+    this.platform.log.debug('Send controlUnit for', this.unitName, targetControls);
     
     this.session.sendControlUnit(this.unitId, targetControls)
       .then(() => callback(null))

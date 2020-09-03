@@ -138,6 +138,8 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
       // loop over the discovered devices and register each one if it has not already been registered
       for (const unitKey in unitList) {
         const unitInfo = unitList[unitKey];
+        this.log.info('Unit', unitInfo.name, 'is a', unitInfo.type, 'with fixtureId', unitInfo.fixtureId);
+        this.log.debug('Unit info for', unitInfo.name, unitInfo);
 
         // check if unit type is supported and figure out the handler class for it
         let handlerClass;
@@ -238,7 +240,7 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
   }
 
   onNetworkUpdated(message) {
-    this.log.info('Network updated ->', message);
+    this.log.info('Network updated', message);
     // TODO -- discover new devices, remove old ones
   }
 }
