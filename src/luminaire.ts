@@ -192,7 +192,7 @@ export class LuminaireAccessory {
         }
 
         default: {
-          this.platform.log.info('Unsupported control type', controlInfo.type, 'for unit', this.unitName);
+          this.platform.log.debug('Unsupported control type', controlInfo.type, 'for unit', this.unitName);
           break;
         }
       }
