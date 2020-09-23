@@ -191,7 +191,7 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
           // the `context` property can be used to store any data about the accessory you may need
           accessory.context.fixtureInfo = await this.casambi.requestFixtureInformation(unitInfo.fixtureId);
 
-          // create the accessory handler for the newly create accessory
+          // create the accessory handler for the newly created accessory
           new handlerClass(this, accessory, session, unitInfo);
 
           // link the accessory to your platform
