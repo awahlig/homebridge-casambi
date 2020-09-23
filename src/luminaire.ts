@@ -108,7 +108,7 @@ export class LuminaireAccessory {
 
     this.sendControlUnit(callback, {
       Dimmer: {
-        value: (value ? this.brightness : 0) / 100.0,
+        value: (value ? this.brightness || 100 : 0) / 100.0,
       },
     });
   }
