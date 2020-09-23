@@ -16,6 +16,7 @@ const UNITCHANGED_DELAY = 500;
  */
 export class LuminaireAccessory {
   private service: Service;
+  private verticalService?: Service;
   unitName: string;
   unitId: number;
   brightness: number;
@@ -33,6 +34,7 @@ export class LuminaireAccessory {
     this.unitId = unitInfo.id;
     this.minCCT = 2700;
     this.maxCCT = 4000;
+    this.brightness = 0.0;
     
     const fixtureInfo = accessory.context.fixtureInfo;
     this.platform.log.debug('Fixture info for unit', unitInfo.name, fixtureInfo);
@@ -67,9 +69,9 @@ export class LuminaireAccessory {
           hasOnCharacteristic = true;
 
           // register handlers for the Brightness Characteristic
-          this.service.getCharacteristic(this.platform.Characteristic.Brightness)
-            .on('set', this.setBrightness.bind(this));
-
+          this.brightness = this.service.getCharacteristic(this.platform.Characteristic.Brightness)
+            .on('set', this.setBrightness.bind(this))
+            .value as number;
           break;
         }
 
@@ -77,6 +79,27 @@ export class LuminaireAccessory {
           // register handlers for the ColorTemperature Characteristic
           this.service.getCharacteristic(this.platform.Characteristic.ColorTemperature)
             .on('set', this.setColorTemperature.bind(this));
+          break;
+        }
+
+        case 'vertical': {
+          // this controls the direction of the light (up/down)
+          // Since there is no corresponding characteristic for this in HomeKit yet, add a separate Lightbulb service
+          // and use its Brightness characteristic to control the direction.
+          this.verticalService = this.accessory.getServiceById(this.platform.Service.Lightbulb, 'vertical')
+            || this.accessory.addService(new this.platform.Service.Lightbulb('', 'vertical'));
+
+          // set the service name, this is what is displayed as the default name on the Home app
+          this.service.setCharacteristic(this.platform.Characteristic.Name, unitInfo.name + ' Brightness');
+          this.verticalService.setCharacteristic(this.platform.Characteristic.Name, unitInfo.name + ' Up Down');
+
+          // register handlers for the On/Off Characteristic
+          this.verticalService.getCharacteristic(this.platform.Characteristic.On)
+            .on('set', this.setOn.bind(this));
+
+          // register handlers for the Brightness Characteristic
+          this.verticalService.getCharacteristic(this.platform.Characteristic.Brightness)
+            .on('set', this.setVerticalBrightness.bind(this));
           break;
         }
 
@@ -90,9 +113,6 @@ export class LuminaireAccessory {
     if (!hasOnCharacteristic) {
       this.platform.log.error('Luminaire', unitInfo.name, 'has no On characteristic');
     }
-
-    // get the last known brightness
-    this.brightness = this.service.getCharacteristic(this.platform.Characteristic.Brightness).value as number;
 
     // monitor for state changes; current values are always sent after connecting
     session.on('unitChanged', this.onUnitChanged.bind(this));
@@ -125,6 +145,21 @@ export class LuminaireAccessory {
     this.sendControlUnit(callback, {
       Dimmer: {
         value: this.brightness / 100.0,
+      },
+    });
+  }
+
+  /**
+   * Handle "SET" requests from HomeKit
+   * These are sent when the user changes the state of an accessory, for example, changing the Brightness
+   */
+  setVerticalBrightness(value: CharacteristicValue, callback: CharacteristicSetCallback) {
+
+    this.platform.log.debug('Set characteristic vertical/Brightness of unit', this.unitName, 'to', value);
+
+    this.sendControlUnit(callback, {
+      Vertical: {
+        value: 1.0 - (value as number) / 100.0,
       },
     });
   }
@@ -178,6 +213,19 @@ export class LuminaireAccessory {
           if (brightness > 0) {
             this.service.updateCharacteristic(this.platform.Characteristic.Brightness, brightness);
             this.brightness = brightness;
+          }
+          break;
+        }
+
+        case 'Vertical': {
+          if (this.verticalService) {
+            const isOn = this.service.getCharacteristic(this.platform.Characteristic.On).value as boolean;
+            // mimic the on/off state of the main Lightbulb service
+            this.verticalService.updateCharacteristic(this.platform.Characteristic.On, isOn);
+            if (isOn) {
+              const position = (1.0 - controlInfo.value) * 100.0;
+              this.verticalService.updateCharacteristic(this.platform.Characteristic.Brightness, position);
+            }
           }
           break;
         }
