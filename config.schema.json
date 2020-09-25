@@ -27,6 +27,13 @@
       "password": {
         "type": "string",
         "required": true
+      },
+      "verticalControl": {
+        "type": "string",
+        "description": "Select how to present the up/down control feature of some Luminaires.",
+        "oneOf": [
+          { "title": "As a separate brightness characteristic", "enum": ["separate"] }
+        ]
       }
     }
   },
@@ -34,6 +41,7 @@
     { "key": "apiKey", "title": "API Key" },
     { "key": "loginMode" },
     { "key": "email", "title": "Credentials", "placeholder": "e-mail" },
-    { "key": "password", "notitle": true, "placeholder": "password" }
+    { "key": "password", "notitle": true, "placeholder": "password" },
+    { "key": "verticalControl", "title": "Up/down luminaire control" }
   ]
 }

@@ -84,6 +84,17 @@ export class LuminaireAccessory {
 
         case 'vertical': {
           // this controls the direction of the light (up/down)
+          
+          // if disabled in config, make sure the separate Lightbulb service is removed
+          if (this.platform.config.verticalControl !== 'separate') {
+            this.platform.log.info('Control type vertical is disabled in config for unit', unitInfo.name);
+            const verticalService = this.accessory.getServiceById(this.platform.Service.Lightbulb, 'vertical');
+            if (verticalService) {
+              this.accessory.removeService(verticalService);
+            }
+            break;
+          }
+
           // Since there is no corresponding characteristic for this in HomeKit yet, add a separate Lightbulb service
           // and use its Brightness characteristic to control the direction.
           this.verticalService = this.accessory.getServiceById(this.platform.Service.Lightbulb, 'vertical')
