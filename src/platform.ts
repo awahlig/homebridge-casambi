@@ -151,12 +151,8 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
           }
           default: {
             this.log.info('Skipping unit', unitInfo.name, '- unsupported type', unitInfo.type);
-            handlerClass = null;
+            continue;
           }
-        }
-        if (!handlerClass) {
-          // move on to the next unit if this one is not supported
-          continue;
         }
 
         // generate a unique id for the accessory; this should be generated from
@@ -184,12 +180,21 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
         // the accessory does not yet exist, so we need to create it
           this.log.info('Registering accessory', unitInfo.name);
 
+          // request fixture info, this tells us what controls are supported by the unit
+          let fixtureInfo;
+          try {
+            fixtureInfo = await this.casambi.requestFixtureInformation(unitInfo.fixtureId);
+          } catch (error) {
+            this.log.error('Error obtaining fixture information, skipping unit');
+            continue;
+          }
+
           // create a new accessory
           const accessory = new this.api.platformAccessory(unitInfo.name, uuid);
 
-          // request and store fixture info in the `accessory.context`
+          // store fixture info in the `accessory.context`
           // the `context` property can be used to store any data about the accessory you may need
-          accessory.context.fixtureInfo = await this.casambi.requestFixtureInformation(unitInfo.fixtureId);
+          accessory.context.fixtureInfo = fixtureInfo;
 
           // create the accessory handler for the newly created accessory
           new handlerClass(this, accessory, session, unitInfo);
