@@ -117,6 +117,7 @@ export class CasambiNetworkSession extends events.EventEmitter {
     this.wireId = 0;
     api.connection.on('close', this.onConnectionClose.bind(this));
     api.connection.on('message', this.onMessage.bind(this));
+    this.setMaxListeners(100);
   }
 
   get(path: string, config?: AxiosRequestConfig): Promise<any> {
