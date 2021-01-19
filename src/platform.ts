@@ -158,7 +158,12 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
         // generate a unique id for the accessory; this should be generated from
         // something globally unique, but constant, for example, the device serial
         // number or MAC address
-        const uuid = this.api.hap.uuid.generate(unitInfo.address);
+        let uuidData: string = unitInfo.address;
+        if (!uuidData) {
+          uuidData = `homebridge-casambi/networks/${session.networkInfo.id}/units/${unitInfo.id}`;
+        }
+        this.log.debug('UUID data for unit', unitInfo.name, 'is', uuidData);
+        const uuid = this.api.hap.uuid.generate(uuidData);
         usedUUIDs.add(uuid);
 
         // see if an accessory with the same uuid has already been registered and restored from
