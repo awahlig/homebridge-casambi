@@ -190,7 +190,7 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
           try {
             fixtureInfo = await this.casambi.requestFixtureInformation(unitInfo.fixtureId);
           } catch (error) {
-            this.log.error('Error obtaining fixture information, skipping unit');
+            this.log.error('Skipping unit', unitInfo.name, '- error obtaining fixture info:', error.message);
             continue;
           }
 
