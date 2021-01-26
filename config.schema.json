@@ -28,9 +28,13 @@
         "type": "string",
         "required": true
       },
+      "ignoreFixtureIds": {
+        "type": "string",
+        "description": "List of comma-separated Fixture IDs of devices that should not be added to HomeKit. Refer to the Casambi App or Homebridge log file to obtain Fixture IDs."
+      },
       "verticalControl": {
         "type": "string",
-        "description": "Select how to present the up/down control feature of some Luminaires.",
+        "description": "Select how to present the up/down control feature of Luminaires that support it.",
         "oneOf": [
           { "title": "As a separate brightness characteristic", "enum": ["separate"] }
         ]
@@ -42,6 +46,21 @@
     { "key": "loginMode" },
     { "key": "email", "title": "Credentials", "placeholder": "e-mail" },
     { "key": "password", "notitle": true, "placeholder": "password" },
-    { "key": "verticalControl", "title": "Up/down luminaire control" }
+    { "type": "section",
+      "title": "Ignore Fixture IDs",
+      "expandable": true,
+      "expanded": false,
+      "items": [
+        { "key": "ignoreFixtureIds", "notitle": true }
+      ]
+    },
+    { "type": "section",
+      "title": "Up/down luminaire control",
+      "expandable": true,
+      "expanded": false,
+      "items": [
+        { "key": "verticalControl", "notitle": true }
+      ]
+    }
   ]
 }

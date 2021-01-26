@@ -126,6 +126,9 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
     this.casambi.connection.on('close', this.onConnectionClose.bind(this));
     this.casambi.connection.on('timeout', this.onConnectionTimeout.bind(this));
 
+    const ignoreFixtureIds = new Set(config.ignoreFixtureIds?.split(/[\s,]+/));
+    this.log.debug('Will ignore fixtureIds', ignoreFixtureIds);
+
     this.sessions = sessions;
     const usedUUIDs = new Set();
     for (const session of sessions) {
@@ -140,6 +143,12 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
         const unitInfo = unitList[unitKey];
         this.log.info('Unit', unitInfo.name, 'is a', unitInfo.type, 'with fixtureId', unitInfo.fixtureId);
         this.log.debug('Unit info for', unitInfo.name, unitInfo);
+
+        // skip unit if its fixtureId has been added to the ignore list in settings
+        if (ignoreFixtureIds.has(String(unitInfo.fixtureId))) {
+          this.log.info('Skipping unit', unitInfo.name, '- plugin configured to ignore fixtureId', unitInfo.fixtureId);
+          continue;
+        }
 
         // check if unit type is supported and figure out the handler class for it
         let handlerClass;
