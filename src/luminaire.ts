@@ -19,6 +19,7 @@ export class LuminaireAccessory {
   private verticalService?: Service;
   unitName: string;
   unitId: number;
+  controlType: string;
   brightness: number;
   minCCT: number;
   maxCCT: number;
@@ -32,6 +33,7 @@ export class LuminaireAccessory {
   ) {
     this.unitName = unitInfo.name;
     this.unitId = unitInfo.id;
+    this.controlType = '';
     this.minCCT = 2700;
     this.maxCCT = 4000;
     this.brightness = 0.0;
@@ -58,15 +60,26 @@ export class LuminaireAccessory {
 
     // each service must implement at-minimum the "required characteristics" for the given service type
     // see https://developers.homebridge.io/#/service/Lightbulb
-    let hasOnCharacteristic = false;
     for (const controlInfo of fixtureInfo.controls) {
-      switch (controlInfo.type) {
+      switch (controlInfo.type.toLowerCase()) {
 
-        case 'dimmer': {
+        case 'dimmer':
+        case 'onoff': {
           // register handlers for the On/Off Characteristic
           this.service.getCharacteristic(this.platform.Characteristic.On)
             .on('set', this.setOn.bind(this));
-          hasOnCharacteristic = true;
+          this.controlType = controlInfo.type.toLowerCase();
+
+          // stop here if this luminaire only has a simple on/off switch
+          if (this.controlType === 'onoff') {
+            // older versions of the plugin didn't support the 'onoff' control type and could've
+            // added the brightness characteristic so remove it here if that's the case
+            if (this.service.testCharacteristic(this.platform.Characteristic.Brightness)) {
+              const brightness = this.service.getCharacteristic(this.platform.Characteristic.Brightness);
+              this.service.removeCharacteristic(brightness);
+            }
+            break;
+          }
 
           // register handlers for the Brightness Characteristic
           this.brightness = this.service.getCharacteristic(this.platform.Characteristic.Brightness)
@@ -121,8 +134,9 @@ export class LuminaireAccessory {
       }
     }
 
-    if (!hasOnCharacteristic) {
-      this.platform.log.error('Luminaire', unitInfo.name, 'has no On characteristic');
+    // log an error if this luminaire's control type is not supported
+    if (!this.controlType) {
+      this.platform.log.error('Luminaire', unitInfo.name, 'has an unknown control type');
     }
 
     // monitor for state changes; current values are always sent after connecting
@@ -137,11 +151,25 @@ export class LuminaireAccessory {
 
     this.platform.log.debug('Set characteristic On of unit', this.unitName, 'to', value);
 
-    this.sendControlUnit(callback, {
-      Dimmer: {
-        value: (value ? this.brightness || 100 : 0) / 100.0,
-      },
-    });
+    switch (this.controlType) {
+      case 'dimmer': {
+        this.sendControlUnit(callback, {
+          Dimmer: {
+            value: (value ? this.brightness || 100 : 0) / 100.0,
+          },
+        });
+        break;
+      }
+
+      case 'onoff': {
+        this.sendControlUnit(callback, {
+          OnOff: {
+            value: value ? 1 : 0,
+          }
+        });
+        break;
+      }
+    }
   }
 
   /**
@@ -216,9 +244,9 @@ export class LuminaireAccessory {
     this.platform.log.debug('Updating characteristics from unitChanged for', this.unitName);
 
     for (const controlInfo of message.controls) {
-      switch (controlInfo.type) {
+      switch (controlInfo.type.toLowerCase()) {
 
-        case 'Dimmer': {
+        case 'dimmer': {
           const brightness = controlInfo.value * 100.0;
           this.service.updateCharacteristic(this.platform.Characteristic.On, brightness > 0);
           if (brightness > 0) {
@@ -228,7 +256,12 @@ export class LuminaireAccessory {
           break;
         }
 
-        case 'Vertical': {
+        case 'onoff': {
+          this.service.updateCharacteristic(this.platform.Characteristic.On, controlInfo.value > 0);
+          break;
+        }
+
+        case 'vertical': {
           if (this.verticalService) {
             const isOn = this.service.getCharacteristic(this.platform.Characteristic.On).value as boolean;
             // mimic the on/off state of the main Lightbulb service
@@ -241,7 +274,7 @@ export class LuminaireAccessory {
           break;
         }
 
-        case 'CCT': {
+        case 'cct': {
           // update CCT limits, used when sending color temperature
           this.minCCT = controlInfo.min;
           this.maxCCT = controlInfo.max;
