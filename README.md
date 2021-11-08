@@ -2,8 +2,6 @@
 
 Adds support for devices controlled using the Casambi App (or any of its OEMs). Requires a developer API key to access the Cloud API. Refer to [developer.casambi.com](https://developer.casambi.com/) for more information.
 
-The network in the Casambi App must have a gateway configured. A gateway can be any phone/tablet running the Casambi App and placed within the Bluetooth range of the lights at all times. The Cloud API servers communicate with the gateway device and use its Bluetooth radio to control the lights.
-
 Right now, devices other than luminaires are not supported. Also, some features may not be accessible through HomeKit.
 
 Supported luminaire features:
@@ -11,6 +9,10 @@ Supported luminaire features:
 * brightness
 * color temperature
 * [vertical](https://github.com/awahlig/homebridge-casambi/commit/7e6a0b548620621afd5e1d721f1a27e7a5c70df1) (optional, see config UI)
+
+## Prerequisites
+
+The network in the Casambi App must have a [gateway configured](https://support.casambi.com/support/solutions/articles/12000017046-how-to-enable-a-gateway-for-a-network-). A gateway can be any phone/tablet running the Casambi App and placed within the Bluetooth range of the lights at all times. The Cloud API servers communicate with the gateway device and use its Bluetooth radio to control the lights.
 
 ## Installation
 
