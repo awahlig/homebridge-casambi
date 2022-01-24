@@ -165,7 +165,7 @@ export class LuminaireAccessory {
         this.sendControlUnit(callback, {
           OnOff: {
             value: value ? 1 : 0,
-          }
+          },
         });
         break;
       }
@@ -293,9 +293,18 @@ export class LuminaireAccessory {
 
   sendControlUnit(callback: CharacteristicSetCallback, targetControls) {
     this.platform.log.debug('Send controlUnit for', this.unitName, targetControls);
+
+    // Fix for https://github.com/awahlig/homebridge-casambi/issues/23
+    let called = false;
+    const onceCallback = (result) => {
+      if (!called) {
+        called = true;
+        callback(result);
+      }
+    };
     
     this.session.sendControlUnit(this.unitId, targetControls)
-      .then(() => callback(null))
-      .catch(err => callback(err));
+      .then(() => onceCallback(null))
+      .catch(err => onceCallback(err));
   }
 }
