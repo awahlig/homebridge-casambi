@@ -21,7 +21,7 @@ export class CasambiAPI {
   /**
    * You'll need an API key to use this class. See:
    * https://developer.casambi.com/#api-get-started
-   * @param apiKey 
+   * @param apiKey
    */
   constructor(public apiKey: string) {
     this.axios = axios.create({
@@ -31,11 +31,13 @@ export class CasambiAPI {
     this.connection = new CasambiConnection(apiKey);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   get(path: string, config?: AxiosRequestConfig): Promise<any> {
     return this.axios.get(path, config)
       .then((response: AxiosResponse) => response.data);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   post(path: string, data, config?: AxiosRequestConfig): Promise<any> {
     return this.axios.post(path, data, config)
       .then((response: AxiosResponse) => response.data);
@@ -44,8 +46,8 @@ export class CasambiAPI {
   /**
    * Log into given Casambi Network and return a session object.
    * https://developer.casambi.com/#create-network-session
-   * @param email 
-   * @param password 
+   * @param email
+   * @param password
    */
   createNetworkSession(email: string, password: string): Promise<CasambiNetworkSession> {
     return this.post('/networks/session', {
@@ -60,8 +62,8 @@ export class CasambiAPI {
   /**
    * Log into given user/site account and return a session object.
    * https://developer.casambi.com/#create-user-session
-   * @param email 
-   * @param password 
+   * @param email
+   * @param password
    */
   createUserSession(email: string, password: string): Promise<CasambiUserSession> {
     return this.post('/users/session', {
@@ -73,15 +75,16 @@ export class CasambiAPI {
 
   /**
    * https://developer.casambi.com/#request-fixture-information
-   * @param fixtureId 
+   * @param fixtureId
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   requestFixtureInformation(fixtureId: number): Promise<any> {
     return this.get(`/fixtures/${fixtureId}`);
   }
 
   /**
    * https://developer.casambi.com/#request-fixture-icon
-   * @param fixtureId 
+   * @param fixtureId
    */
   requestFixtureIcon(fixtureId: number): Promise<ArrayBuffer> {
     return this.get(`/fixtures/${fixtureId}/icon`, {
@@ -93,7 +96,7 @@ export class CasambiAPI {
 /**
  * Represents a session for a specific Casambi Network.
  * Create using CasambiAPI.createNetworkSession().
- * 
+ *
  * Events:
  * - "wireOpen"
  *   Wire has been opened.
@@ -120,6 +123,7 @@ export class CasambiNetworkSession extends events.EventEmitter {
     this.setMaxListeners(100);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   get(path: string, config?: AxiosRequestConfig): Promise<any> {
     return this.api.get(`/networks/${this.networkInfo.id}${path}`, {
       headers: {'X-Casambi-Session': this.sessionId},
@@ -130,6 +134,7 @@ export class CasambiNetworkSession extends events.EventEmitter {
   /**
    * https://developer.casambi.com/#request-network-information
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   requestInformation(): Promise<any> {
     return this.get('');
   }
@@ -137,14 +142,16 @@ export class CasambiNetworkSession extends events.EventEmitter {
   /**
    * https://developer.casambi.com/#request-network-unit-list
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   requestUnitList(): Promise<any> {
     return this.get('/units');
   }
 
   /**
    * https://developer.casambi.com/#request-network-unit-state
-   * @param unitId 
+   * @param unitId
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   requestUnitState(unitId: number): Promise<any> {
     return this.get(`/units/${unitId}/state`);
   }
@@ -152,6 +159,7 @@ export class CasambiNetworkSession extends events.EventEmitter {
   /**
    * https://developer.casambi.com/#request-network-state
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   requestState(): Promise<any> {
     return this.get('/state');
   }
@@ -159,6 +167,7 @@ export class CasambiNetworkSession extends events.EventEmitter {
   /**
    * https://developer.casambi.com/#request-network-groups
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   requestGroups(): Promise<any> {
     return this.get('/groups');
   }
@@ -166,21 +175,23 @@ export class CasambiNetworkSession extends events.EventEmitter {
   /**
    * https://developer.casambi.com/#request-network-scenes
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   requestScenes(): Promise<any> {
     return this.get('/scenes');
   }
 
   /**
    * https://developer.casambi.com/#request-network-datapoints
-   * @param filterOptions 
+   * @param filterOptions
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   requestDatapoints(filterOptions: string): Promise<any> {
     return this.get(`/datapoints?${filterOptions}`);
   }
 
   /**
    * https://developer.casambi.com/#request-network-unit-icon
-   * @param unitId 
+   * @param unitId
    */
   requestUnitIcon(unitId: number): Promise<ArrayBuffer> {
     return this.get(`/units/${unitId}/icon`, {
@@ -191,13 +202,14 @@ export class CasambiNetworkSession extends events.EventEmitter {
   /**
    * https://developer.casambi.com/#request-network-gallery
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   requestGallery(): Promise<any> {
     return this.get('/gallery');
   }
 
   /**
    * https://developer.casambi.com/#request-network-image
-   * @param imageId 
+   * @param imageId
    */
   requestImage(imageId: string): Promise<ArrayBuffer> {
     return this.get(`/images/${imageId}`, {
@@ -238,8 +250,8 @@ export class CasambiNetworkSession extends events.EventEmitter {
    * Control a Casambi unit (turn light on/off, etc.) on this network.
    * Opens a wire first, if needed.
    * https://developer.casambi.com/#ws-control-messages
-   * @param unitId 
-   * @param targetControls 
+   * @param unitId
+   * @param targetControls
    */
   sendControlUnit(unitId: number, targetControls): Promise<void> {
     return this.openWire().then(() =>
@@ -329,7 +341,7 @@ export class CasambiSite {
 /**
  * Represents a WebSocket connection to the Casambi Cloud API.
  * https://developer.casambi.com/#ws-service
- * 
+ *
  * Events:
  * - "open"
  *   Connection to the server established.
@@ -400,8 +412,8 @@ export class CasambiConnection extends events.EventEmitter {
    * Connects to the server first, if needed.
    * Promise resolves with the newly assigned wire ID.
    * https://developer.casambi.com/#ws-open-message
-   * @param networkId 
-   * @param sessionId 
+   * @param networkId
+   * @param sessionId
    */
   openWire(networkId: string, sessionId: string): Promise<number> {
     const openMessage = {
@@ -433,7 +445,7 @@ export class CasambiConnection extends events.EventEmitter {
   /**
    * Close/pause a wire.
    * https://developer.casambi.com/#ws-close-message
-   * @param wireId 
+   * @param wireId
    */
   closeWire(wireId: number): Promise<void> {
     return this.sendMessage({
@@ -445,9 +457,9 @@ export class CasambiConnection extends events.EventEmitter {
   /**
    * Control a Casambi unit (turn light on/off, etc.).
    * https://developer.casambi.com/#ws-control-messages
-   * @param wireId 
-   * @param unitId 
-   * @param targetControls 
+   * @param wireId
+   * @param unitId
+   * @param targetControls
    */
   sendControlUnit(wireId: number, unitId: number, targetControls): Promise<void> {
     return this.sendMessage({
@@ -460,7 +472,7 @@ export class CasambiConnection extends events.EventEmitter {
 
   /**
    * Send raw json to the server.
-   * @param message 
+   * @param message
    */
   sendMessage(message): Promise<void> {
     return new Promise((resolve, reject) => {

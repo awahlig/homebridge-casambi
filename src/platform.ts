@@ -106,7 +106,7 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
         }
       }
 
-    } catch (error: any) {
+    } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       if (error.response && error.response.status === 401) {
         // wrong email/password -- stop now
         this.log.error('Error logging in: wrong credentials');
@@ -121,7 +121,7 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
 
       return;
     }
-    
+
     this.casambi.connection.on('open', this.onConnectionOpen.bind(this));
     this.casambi.connection.on('close', this.onConnectionClose.bind(this));
     this.casambi.connection.on('timeout', this.onConnectionTimeout.bind(this));
@@ -198,7 +198,7 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
           let fixtureInfo;
           try {
             fixtureInfo = await this.casambi.requestFixtureInformation(unitInfo.fixtureId);
-          } catch (error: any) {
+          } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             this.log.error('Skipping unit', unitInfo.name, '- error obtaining fixture info:', error.message);
             continue;
           }

@@ -37,7 +37,7 @@ export class LuminaireAccessory {
     this.minCCT = 2700;
     this.maxCCT = 4000;
     this.brightness = 0.0;
-    
+
     const fixtureInfo = accessory.context.fixtureInfo;
     this.platform.log.debug('Fixture info for unit', unitInfo.name, fixtureInfo);
 
@@ -97,7 +97,7 @@ export class LuminaireAccessory {
 
         case 'vertical': {
           // this controls the direction of the light (up/down)
-          
+
           // if disabled in config, make sure the separate Lightbulb service is removed
           if (this.platform.config.verticalControl !== 'separate') {
             this.platform.log.info('Control type vertical is disabled in config for unit', unitInfo.name);
@@ -302,7 +302,7 @@ export class LuminaireAccessory {
         callback(result);
       }
     };
-    
+
     this.session.sendControlUnit(this.unitId, targetControls)
       .then(() => onceCallback(null))
       .catch(err => onceCallback(err));
