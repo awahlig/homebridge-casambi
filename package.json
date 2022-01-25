@@ -12,12 +12,12 @@
     "url": "https://github.com/awahlig/homebridge-casambi/issues"
   },
   "engines": {
-    "node": ">=10.17.0",
-    "homebridge": ">0.4.53"
+    "node": ">=14.18.1",
+    "homebridge": ">=1.3.5"
   },
   "main": "dist/index.js",
   "scripts": {
-    "lint": "eslint src/**.ts",
+    "lint": "eslint src/**.ts --max-warnings=0",
     "watch": "npm run build && npm link && nodemon",
     "build": "rimraf ./dist && tsc",
     "prepublishOnly": "npm run lint && npm run build"
@@ -26,18 +26,18 @@
     "homebridge-plugin"
   ],
   "dependencies": {
-    "axios": "^0.21.1",
-    "ws": "^7.3.1"
+    "axios": "^0.25.0",
+    "ws": "^8.4.2"
   },
   "devDependencies": {
-    "@types/node": "^14.0.22",
-    "@typescript-eslint/eslint-plugin": "^3.6.0",
-    "@typescript-eslint/parser": "^3.6.0",
-    "eslint": "^7.4.0",
-    "homebridge": "^1.1.1",
-    "nodemon": "^2.0.4",
+    "@types/node": "^16.10.9",
+    "@typescript-eslint/eslint-plugin": "^5.0.0",
+    "@typescript-eslint/parser": "^5.0.0",
+    "eslint": "^8.0.1",
+    "homebridge": "^1.3.5",
+    "nodemon": "^2.0.13",
     "rimraf": "^3.0.2",
-    "ts-node": "^8.10.2",
-    "typescript": "^3.9.6"
+    "ts-node": "^10.3.0",
+    "typescript": "^4.4.4"
   }
 }

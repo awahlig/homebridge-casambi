@@ -106,7 +106,7 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
         }
       }
 
-    } catch (error) {
+    } catch (error: any) {
       if (error.response && error.response.status === 401) {
         // wrong email/password -- stop now
         this.log.error('Error logging in: wrong credentials');
@@ -198,7 +198,7 @@ export class CasambiPlatform implements DynamicPlatformPlugin {
           let fixtureInfo;
           try {
             fixtureInfo = await this.casambi.requestFixtureInformation(unitInfo.fixtureId);
-          } catch (error) {
+          } catch (error: any) {
             this.log.error('Skipping unit', unitInfo.name, '- error obtaining fixture info:', error.message);
             continue;
           }
