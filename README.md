@@ -24,26 +24,26 @@ If you'd prefer to do it manually, run ```npm install -g homebridge-casambi``` t
 
 ```
 {
-    "bridge": { ... },
-    "platforms": [
-        {
-            "platform": "Casambi",
-            "apiKey": "your_api_key",
-            "loginMode": "network_or_user",
-            "email": "your_network_login",
-            "password": "your_network_password"
-        }
-    ]
+  "bridge": { ... },
+  "platforms": [
+    {
+      "platform": "Casambi",
+      "apiKey": "your_api_key",
+      "loginMode": "network_or_user",
+      "email": "your_network_login",
+      "password": "your_network_password"
+    }
+  ]
 }
 ```
 
-|                 |                                                                                                                                                                                                                                   |
-|-----------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| ```platform```  | Must be ```Casambi```.                                                                                                                                                                                                            |
-| ```apiKey```    | Your Casambi Cloud API key. Refer to [developer.casambi.com](https://developer.casambi.com/) for more information on how to obtain one.                                                                                           |
+| Key | Meaning |
+|-----|---------|
+| ```platform```  | Must be ```Casambi```. |
+| ```apiKey```    | Your Casambi Cloud API key. Refer to [developer.casambi.com](https://developer.casambi.com/) for more information on how to obtain one. |
 | ```loginMode``` | Either ```network``` or ```user```, depending on whether you're providing network or user (site account) credentials. A site account allows access to devices from multiple networks (using Casambi App's *Sites* functionality). |
-| ```email```     | The network/user login that you configured in the Casambi App.                                                                                                                                                                    |
-| ```password```  | The network/user password.                                                                                                                                                                                                        |
+| ```email```     | The network/user login that you configured in the Casambi App. |
+| ```password```  | The network/user password. |
 
 ## License
 
