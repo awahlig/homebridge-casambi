@@ -115,6 +115,9 @@ dist
 # Stores VSCode workspace
 *.code-workspace
 
+# Stores VSCode Dev Container configuration
+.devcontainer
+
 # yarn v2
 
 .yarn/cache
